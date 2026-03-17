@@ -14,7 +14,7 @@
 ## Docker images:
 ##   cellranger_docker  – must contain: cellranger, gsutil, Python 3
 ##   cellbender_docker  – must contain: cellbender, CUDA drivers, Python 3
-##   pegasus_docker     – ghcr.io/gersteinlab/scrna_processing/pegasus:1.0
+##   pegasus_docker     – majidfarhadloo/scrna_processing_pegasus:latest
 ##                        (built by .github/workflows/build-pegasus-image.yml)
 ##                        contains all pipeline scripts at /opt/pipeline/
 
@@ -88,7 +88,7 @@ workflow SCRNAseqPipeline {
 
     String cellranger_docker = "us.gcr.io/broad-dsp-gcr-public/terra-jupyter-gatk:2.2.5"
     String cellbender_docker = "us.gcr.io/broad-dsde-methods/cellbender:0.3.0"
-    String pegasus_docker    = "ghcr.io/gersteinlab/scrna_processing/pegasus:1.0"
+    String pegasus_docker    = "majidfarhadloo/scrna_processing_pegasus:latest"
 
     # -----------------------------------------------------------------------
     # Resource tuning (optional overrides)

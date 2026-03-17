@@ -2,12 +2,12 @@
 #
 # Custom Docker image for the PegasusPipeline WDL task.
 # Built automatically via .github/workflows/build-pegasus-image.yml
-# and pushed to: ghcr.io/gersteinlab/scrna_processing/pegasus
+# and pushed to: docker.io/majidfarhadloo/scrna_processing_pegasus
 #
 # To build and push manually:
-#   docker build -t ghcr.io/gersteinlab/scrna_processing/pegasus:1.0 \
+#   docker build -t majidfarhadloo/scrna_processing_pegasus:1.0 \
 #                -f terra_wdl/Dockerfile.pegasus .
-#   docker push ghcr.io/gersteinlab/scrna_processing/pegasus:1.0
+#   docker push majidfarhadloo/scrna_processing_pegasus:1.0
 
 FROM python:3.9-slim
 
