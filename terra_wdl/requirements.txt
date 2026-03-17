@@ -1,30 +1,19 @@
 # Python dependencies baked into the Pegasus Docker image.
 # Installed during `docker build` via Dockerfile.pegasus.
-# Pin versions for reproducibility across Terra workflow runs.
 #
-# IMPORTANT: pegasuspy 1.8.0 requires igraph<=0.9.10 (not python-igraph>=0.10).
-# leidenalg 0.9.1 is the last version compatible with igraph 0.9.x.
+# Strategy: pin pegasuspy and packages our code directly imports;
+# let pip resolve the pegasus ecosystem (igraph, leidenalg, anndata, etc.)
+# to avoid version conflicts within that tightly-coupled dependency tree.
 
 # Core single-cell analysis
-pegasuspy==1.8.0
-pegasusio==0.9.0
+# NOTE: PyPI package name is pegasuspy (not pegasus); imports as `import pegasus`
+pegasuspy==1.9.1.post1
 scrublet==0.2.3
 doubletdetection==4.2
 
-# Harmony batch correction (harmonypy API used in Pegasus-Pipeline.py)
+# Harmony batch correction (harmonypy API used directly in Pegasus-Pipeline.py)
 harmonypy==0.0.9
 
-# Data / numerics
-numpy==1.24.4
-pandas==2.0.3
-scipy==1.11.4
-
-# Plotting
+# Plotting (pinned — used directly in Pegasus-Pipeline.py)
 matplotlib==3.7.5
 seaborn==0.13.2
-
-# Utilities
-anndata==0.10.3
-# igraph 0.9.10 is required by pegasuspy 1.8.0 (requires igraph<=0.9.10)
-python-igraph==0.9.10
-leidenalg==0.9.1
