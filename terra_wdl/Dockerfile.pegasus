@@ -1,0 +1,52 @@
+# Dockerfile.pegasus
+#
+# Custom Docker image for the PegasusPipeline WDL task.
+# Built automatically via .github/workflows/build-pegasus-image.yml
+# and pushed to: ghcr.io/gersteinlab/scrna_processing/pegasus
+#
+# To build and push manually:
+#   docker build -t ghcr.io/gersteinlab/scrna_processing/pegasus:1.0 \
+#                -f terra_wdl/Dockerfile.pegasus .
+#   docker push ghcr.io/gersteinlab/scrna_processing/pegasus:1.0
+
+FROM python:3.9-slim
+
+LABEL org.opencontainers.image.source="https://github.com/gersteinlab/ScRNA_processing"
+LABEL org.opencontainers.image.description="PEC scRNA-seq Pegasus analysis pipeline"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# System dependencies required by scientific Python packages and pegasus
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        gcc \
+        g++ \
+        cmake \
+        git \
+        libhdf5-dev \
+        libopenblas-dev \
+        liblapack-dev \
+        pkg-config \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip and install wheel before heavy packages
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Install all Python dependencies pinned in requirements.txt
+COPY terra_wdl/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Create pipeline directory and copy scripts + marker reference files
+RUN mkdir -p /opt/pipeline
+
+COPY Pegasus-Pipeline.py            /opt/pipeline/Pegasus-Pipeline.py
+COPY terra_wdl/cellranger_task.py  /opt/pipeline/cellranger_task.py
+COPY terra_wdl/cellbender_task.py  /opt/pipeline/cellbender_task.py
+COPY AHBA_PFC_filtered.json         /opt/pipeline/AHBA_PFC_filtered.json
+COPY Hybrid_subclass_markers.json   /opt/pipeline/Hybrid_subclass_markers.json
+
+# Set working directory to pipeline scripts
+WORKDIR /opt/pipeline
+
+# Default entrypoint: allow running any python script directly
+ENTRYPOINT ["python"]

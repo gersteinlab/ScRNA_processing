@@ -1,0 +1,5 @@
+# Local dependencies for generate_sample_table.py
+# Install with: pip install -r requirements_local.txt
+
+pandas>=1.5.0
+numpy>=1.23.0

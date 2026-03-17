@@ -1,0 +1,26 @@
+# Python dependencies baked into the Pegasus Docker image.
+# Installed during `docker build` via Dockerfile.pegasus.
+# Pin versions for reproducibility across Terra workflow runs.
+
+# Core single-cell analysis
+pegasus==1.8.0
+pegasusio==0.9.0
+scrublet==0.2.3
+doubletdetection==4.2
+
+# Harmony batch correction (used by pegasus run_harmony)
+harmonypy==0.0.9
+
+# Data / numerics
+numpy==1.24.4
+pandas==2.0.3
+scipy==1.11.4
+
+# Plotting
+matplotlib==3.7.5
+seaborn==0.13.2
+
+# Utilities
+anndata==0.10.3
+leidenalg==0.10.2
+python-igraph==0.11.3
