@@ -130,12 +130,11 @@ if __name__=="__main__":
         mito_df = mito_df.loc[0:1135,'HumanGeneID':'Symbol']
         mito_list = []
         for i in range(mito_df.shape[0]):
-            mito_list.append(mito_df.loc[i,'Symbol'])
-            mito_list = set(mito_list)
-            mito_list = list(mito_list)
+            mito_list.append(mito_df.loc[i,'Symbol'].upper())
+        mito_list = set(mito_list)
         non_mito_list = []
         for i in data.var_names:
-            if i in mito_list:
+            if i.upper() in mito_list:
                 non_mito_list.append(False)
             else:
                 non_mito_list.append(True)

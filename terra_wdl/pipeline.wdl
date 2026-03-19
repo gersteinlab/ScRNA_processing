@@ -81,6 +81,10 @@ workflow SCRNAseqPipeline {
     ## Run CellBender ambient RNA removal (requires GPU worker)
     Boolean run_cellbender = true
 
+    ## GCP billing project for requester-pays GCS buckets (e.g. "terra-4ea165c8").
+    ## Leave empty ("") if FASTQ buckets are not requester-pays.
+    String billing_project = ""
+
     # -----------------------------------------------------------------------
     # Docker image URIs (pass as workflow inputs so they can be overridden
     # without editing the WDL)
@@ -138,6 +142,7 @@ workflow SCRNAseqPipeline {
         numproc         = cellranger_cpu,
         localmem        = cellranger_mem_gb,
         min_umi_check   = min_umi_check,
+        billing_project = billing_project,
         docker          = cellranger_docker,
         cpu             = cellranger_cpu,
         mem_gb          = cellranger_mem_gb,
@@ -158,6 +163,7 @@ workflow SCRNAseqPipeline {
           chemistry       = chemistry_flags[i],
           estimated_cells = CellRangerCount.estimated_cells[i],
           numproc         = cellranger_cpu,
+          billing_project = billing_project,
           docker          = pegasus_docker,
           cpu             = cellranger_cpu,
           mem_gb          = cellranger_mem_gb,
@@ -260,6 +266,7 @@ task CellRangerCount {
     Int     numproc         = 16
     Int     localmem        = 64
     Int     min_umi_check   = 1000
+    String  billing_project = ""
 
     String  docker
     Int     cpu     = 16
@@ -278,7 +285,8 @@ task CellRangerCount {
       --include_introns  "~{include_introns}" \
       --numproc          ~{numproc} \
       --localmem         ~{localmem} \
-      --min_umi_check    ~{min_umi_check}
+      --min_umi_check    ~{min_umi_check} \
+      --billing_project  "~{billing_project}"
   >>>
 
   output {
@@ -314,6 +322,7 @@ task CiteSeqCount {
     String chemistry       = "v3"
     Int    estimated_cells
     Int    numproc         = 16
+    String billing_project = ""
 
     String docker
     Int    cpu     = 16
@@ -324,13 +333,16 @@ task CiteSeqCount {
   # UMI length: v2 = 26 bp, v3 = 28 bp (from original pipeline)
   Int umil = if chemistry == "v2" then 26 else 28
 
+  # Build gsutil prefix: add -u <project> for requester-pays buckets
+  String gsutil_prefix = if billing_project != "" then "gsutil -u ~{billing_project}" else "gsutil"
+
   command <<<
     set -euo pipefail
 
     # Localize hashing FASTQs from GCS
-    gsutil cp "~{fastq_r1}" ./hashing_R1.fastq.gz
-    gsutil cp "~{fastq_r2}" ./hashing_R2.fastq.gz
-    gsutil cp "~{tag_file}" ./tags.csv
+    ~{gsutil_prefix} cp "~{fastq_r1}" ./hashing_R1.fastq.gz
+    ~{gsutil_prefix} cp "~{fastq_r2}" ./hashing_R2.fastq.gz
+    ~{gsutil_prefix} cp "~{tag_file}" ./tags.csv
 
     mkdir -p CITE-seq-Results
 

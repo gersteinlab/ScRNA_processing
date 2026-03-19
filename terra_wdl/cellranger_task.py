@@ -18,11 +18,12 @@ Usage (called from WDL command block):
     python /opt/pipeline/cellranger_task.py \
         --fastq_dir        gs://bucket/path/sample_folder/ \
         --sample_tag       MS1023HH_010720 \
-        --transcriptome    /cromwell_root/transcriptome_ref/ \
+        --transcriptome    gs://bucket/references/refdata-gex-GRCh38-2024-A \
         --chemistry        v3 \
         --include_introns  true \
         --numproc          16 \
-        --min_umi_check    1000
+        --min_umi_check    1000 \
+        --billing_project  terra-4ea165c8
 """
 
 import argparse
@@ -33,21 +34,46 @@ import subprocess
 import sys
 
 
-def localize_fastq_dir(gcs_path: str, local_dir: str) -> str:
+def localize_fastq_dir(gcs_path: str, local_dir: str,
+                       billing_project: str = "") -> str:
     """
     Copy a GCS FASTQ directory to the local VM disk using gsutil.
     Returns the local path to the downloaded folder.
     CellRanger requires FASTQs to be on local disk.
+
+    If billing_project is set, passes -u <project> for requester-pays buckets.
     """
     os.makedirs(local_dir, exist_ok=True)
     print(f"[cellranger_task] Localizing FASTQs from {gcs_path} → {local_dir}")
-    cmd = ["gsutil", "-m", "cp", "-r", gcs_path.rstrip("/"), local_dir]
+    cmd = ["gsutil"]
+    if billing_project:
+        cmd += ["-u", billing_project]
+    cmd += ["-m", "cp", "-r", gcs_path.rstrip("/"), local_dir]
     result = subprocess.run(cmd, check=True)
     # gsutil cp -r copies the folder itself into local_dir
     folder_name = gcs_path.rstrip("/").split("/")[-1]
     local_fastq_path = os.path.join(local_dir, folder_name)
     print(f"[cellranger_task] FASTQs localized to: {local_fastq_path}")
     return local_fastq_path
+
+
+def localize_reference(gcs_path: str, local_dir: str = "./reference") -> str:
+    """
+    Copy CellRanger reference directory from GCS to local disk.
+    Returns the local path to the reference directory.
+    Skips download if gcs_path is already a local path (not gs://).
+    """
+    if not gcs_path.startswith("gs://"):
+        print(f"[cellranger_task] Transcriptome path is already local: {gcs_path}")
+        return gcs_path
+    os.makedirs(local_dir, exist_ok=True)
+    print(f"[cellranger_task] Localizing reference from {gcs_path} -> {local_dir}")
+    cmd = ["gsutil", "-m", "cp", "-r", gcs_path.rstrip("/"), local_dir]
+    subprocess.run(cmd, check=True)
+    folder_name = gcs_path.rstrip("/").split("/")[-1]
+    local_ref_path = os.path.join(local_dir, folder_name)
+    print(f"[cellranger_task] Reference localized to: {local_ref_path}")
+    return local_ref_path
 
 
 def run_cellranger_count(args) -> str:
@@ -119,8 +145,8 @@ def main():
     )
     parser.add_argument(
         "--transcriptome", required=True,
-        help="Path to the CellRanger reference transcriptome directory "
-             "(localized from GCS by WDL before this script runs)."
+        help="GCS path or local path to the CellRanger reference transcriptome "
+             "directory. If a gs:// path is given, it will be downloaded first."
     )
     parser.add_argument(
         "--chemistry", required=False, default="auto",
@@ -142,13 +168,26 @@ def main():
         "--min_umi_check", required=False, type=int, default=1000,
         help="Median UMI threshold below which sample is flagged low quality (default: 1000)."
     )
+    parser.add_argument(
+        "--billing_project", required=False, default="",
+        help="GCP billing project for requester-pays buckets (e.g. terra-4ea165c8). "
+             "If empty, gsutil runs without -u flag."
+    )
     args = parser.parse_args()
 
     # ------------------------------------------------------------------
     # 1. Localize FASTQ directory from GCS to local disk
     # ------------------------------------------------------------------
     local_fastqs_root = "./fastqs"
-    args.local_fastq_dir = localize_fastq_dir(args.fastq_dir, local_fastqs_root)
+    args.local_fastq_dir = localize_fastq_dir(
+        args.fastq_dir, local_fastqs_root,
+        billing_project=args.billing_project
+    )
+
+    # ------------------------------------------------------------------
+    # 1b. Localize reference transcriptome from GCS to local disk
+    # ------------------------------------------------------------------
+    args.transcriptome = localize_reference(args.transcriptome)
 
     # ------------------------------------------------------------------
     # 2. Run CellRanger count
