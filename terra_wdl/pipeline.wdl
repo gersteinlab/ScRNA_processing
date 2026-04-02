@@ -123,7 +123,7 @@ workflow SCRNAseqPipeline {
     Int    cellbender_epochs     = 150
     Float  cellbender_fpr        = 0.01
     Int    dd_bst_n_iters        = 25
-    Float  dd_pred_pthresh       = 1e-16
+    Float  dd_pred_pthresh       = 0.0000000000000001
     Float  dd_pred_voterthresh   = 0.3
     Int    hvg_n_top             = 5000
     Int    n_jobs_pg             = 10
@@ -444,7 +444,7 @@ task PegasusPipeline {
     Int   qc_percent_mito       = 10
     Int   qc_min_genes          = 200
     Int   dd_bst_n_iters        = 25
-    Float dd_pred_pthresh       = 1e-16
+    Float dd_pred_pthresh       = 0.0000000000000001
     Float dd_pred_voterthresh   = 0.3
     Int   hvg_n_top             = 5000
 
