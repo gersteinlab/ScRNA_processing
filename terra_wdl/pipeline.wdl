@@ -163,7 +163,7 @@ workflow SCRNAseqPipeline {
           fastq_r2        = hashing_fastq_r2[i],
           tag_file        = hashing_tag_files[i],
           chemistry       = chemistry_flags[i],
-          estimated_cells = CellRangerCount.estimated_cells[i],
+          estimated_cells = CellRangerCount.estimated_cells,
           numproc         = cellranger_cpu,
           billing_project = billing_project,
           docker          = pegasus_docker,
@@ -181,8 +181,8 @@ workflow SCRNAseqPipeline {
       call CellBender {
         input:
           sample_tag      = sample_tags[i],
-          input_h5        = CellRangerCount.raw_h5[i],
-          expected_cells  = CellRangerCount.estimated_cells[i],
+          input_h5        = CellRangerCount.raw_h5,
+          expected_cells  = CellRangerCount.estimated_cells,
           epochs          = cellbender_epochs,
           fpr             = cellbender_fpr,
           docker          = cellbender_docker,
