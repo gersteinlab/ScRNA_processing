@@ -279,7 +279,7 @@ task CellRangerCount {
   command <<<
     set -euo pipefail
 
-    python /opt/pipeline/cellranger_task.py \
+    python3 /opt/pipeline/cellranger_task.py \
       --fastq_dir        "~{fastq_dir}" \
       --sample_tag       "~{sample_tag}" \
       --transcriptome    "~{transcriptome}" \
