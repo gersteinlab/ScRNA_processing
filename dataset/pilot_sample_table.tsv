@@ -1,0 +1,3 @@
+entity:sample_id	sample_tag	fastq_dir	chemistry	include_introns	hashing	hashing_fastq_r1	hashing_fastq_r2	hashing_tag_file	subject_id	subject_name	project_id	anatomical_region
+HCTBA_CTR_INS1_HNT_S2_L003	HCTBA_CTR_INS1_HNT_S2_L003	gs://scorch-tmp-jwbzm77-nsu/scorch/grant/um1da051410_spudich/spudich/transcriptome/nuclei/10x_v3.1/NCBI_txid9606/demultiplexed_fastq/HCTBA_CTR_INS1_HNT_S2_L003/	auto	true	false			HCTBA	HCTBA	scorch_spudich_transcriptome	insular_cortex
+HCCLC_OUD_INS1_HNT_S11_L002	HCCLC_OUD_INS1_HNT_S11_L002	gs://scorch-tmp-jwbzm77-nsu/scorch/grant/um1da051410_spudich/spudich/transcriptome/nuclei/10x_v3.1/NCBI_txid9606/demultiplexed_fastq/HCCLC_OUD_INS1_HNT_S11_L002/	auto	true	false			HCCLC	HCCLC	scorch_spudich_transcriptome	insular_cortex
