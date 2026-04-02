@@ -47,7 +47,7 @@ if __name__=="__main__":
     ahba_markers_path   = args.ahba_markers   if args.ahba_markers   else f"{_docker_default}/AHBA_PFC_filtered.json"
     hybrid_markers_path = args.hybrid_markers if args.hybrid_markers else f"{_docker_default}/Hybrid_subclass_markers.json"
 
-    batchname = jsonfile.split("_")[-3]
+    batchname = samplename
     ###Create directory for outputs
     if not os.path.exists(samplename):
         os.mkdir(samplename)

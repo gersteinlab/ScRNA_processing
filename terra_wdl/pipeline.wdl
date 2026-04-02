@@ -479,7 +479,7 @@ config = {
     "currdir":          os.getcwd(),
     "matrix_directory": matrix_directory,
     "mito_file":        "~{mito_file}",
-    "n_jobs_pg":        ~{n_jobs_pg},
+    "n_jobs":           ~{n_jobs_pg},
     "hashing":          str(batch_hashing),
     "qc_min_umis":      ~{qc_min_umis},
     "qc_percent_mito":  ~{qc_percent_mito},

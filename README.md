@@ -111,13 +111,13 @@ Hybrid_subclass_markers.json
 After the **first** successful build, make the package public so Terra can pull
 it without credentials:
 
-> **GitHub → gersteinlab org → Packages → `scrna_processing/pegasus` →
-> Package settings → Change visibility → Public**
+> **Docker Hub → hub.docker.com → `majidfarhadloo/scrna_processing_pegasus` →
+> Settings → Visibility → Public**
 
 The Actions step summary prints the exact image URI to use in Terra, e.g.:
 
 ```
-ghcr.io/gersteinlab/scrna_processing/pegasus:sha-a3f2c1b
+majidfarhadloo/scrna_processing_pegasus:sha-a3f2c1b
 ```
 
 To manually trigger a build or tag a release version:
@@ -151,7 +151,7 @@ In the Terra workflow configuration UI, set these inputs:
 
 | Input | Value |
 |---|---|
-| `pegasus_docker` | `ghcr.io/gersteinlab/scrna_processing/pegasus:sha-XXXXXXX` (from Actions summary) |
+| `pegasus_docker` | `majidfarhadloo/scrna_processing_pegasus:sha-XXXXXXX` (from Actions summary) |
 | `transcriptome_gcs_path` | GCS path to CellRanger reference, e.g. `gs://YOUR_BUCKET/refs/refdata-gex-GRCh38-2020-A` |
 | `mito_file` | `gs://YOUR_BUCKET/refs/mito_genes.csv` |
 | `run_cellbender` | `true` or `false` |
@@ -179,7 +179,7 @@ Repeat one submission per batch.
 ## Docker image
 
 ```
-ghcr.io/gersteinlab/scrna_processing/pegasus:{tag}
+majidfarhadloo/scrna_processing_pegasus:{tag}
 ```
 
 The image contains:
