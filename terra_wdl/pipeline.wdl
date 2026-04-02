@@ -12,7 +12,9 @@
 ## sample_set_table.tsv before uploading to Terra.
 ##
 ## Docker images:
-##   cellranger_docker  – must contain: cellranger, gsutil, Python 3
+##   cellranger_docker  – majidfarhadloo/scrna_processing_cellranger:latest
+##                        (built by .github/workflows/build-cellranger-image.yml)
+##                        contains: cellranger 8.0.1, gsutil, Python 3
 ##   cellbender_docker  – must contain: cellbender, CUDA drivers, Python 3
 ##   pegasus_docker     – majidfarhadloo/scrna_processing_pegasus:latest
 ##                        (built by .github/workflows/build-pegasus-image.yml)
@@ -90,7 +92,7 @@ workflow SCRNAseqPipeline {
     # without editing the WDL)
     # -----------------------------------------------------------------------
 
-    String cellranger_docker = "us.gcr.io/broad-dsp-gcr-public/terra-jupyter-gatk:2.2.5"
+    String cellranger_docker = "majidfarhadloo/scrna_processing_cellranger:latest"
     String cellbender_docker = "us.gcr.io/broad-dsde-methods/cellbender:0.3.0"
     String pegasus_docker    = "majidfarhadloo/scrna_processing_pegasus:latest"
 

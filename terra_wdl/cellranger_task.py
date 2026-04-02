@@ -88,6 +88,7 @@ def run_cellranger_count(args) -> str:
         f"  --fastqs={args.local_fastq_dir}"
         f"  --sample={args.sample_tag}"
         f"  --transcriptome={args.transcriptome}"
+        f"  --chemistry={args.chemistry}"
         f"  --localcores={args.numproc}"
         f"  --localmem={args.localmem}"
         f"  --jobmode=local"

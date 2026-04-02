@@ -1,0 +1,29 @@
+{
+  "SCRNAseqPipeline.fastq_dirs": [
+    "gs://scorch-tmp-jwbzm77-nsu/scorch/grant/um1da051410_spudich/spudich/transcriptome/nuclei/10x_v3.1/NCBI_txid9606/demultiplexed_fastq/HCTBA_CTR_INS1_HNT_S2_L003/",
+    "gs://scorch-tmp-jwbzm77-nsu/scorch/grant/um1da051410_spudich/spudich/transcriptome/nuclei/10x_v3.1/NCBI_txid9606/demultiplexed_fastq/HCCLC_OUD_INS1_HNT_S11_L002/"
+  ],
+  "SCRNAseqPipeline.sample_tags": [
+    "HCTBA_CTR_INS1_HNT_S2_L003",
+    "HCCLC_OUD_INS1_HNT_S11_L002"
+  ],
+  "SCRNAseqPipeline.chemistry_flags": ["auto", "auto"],
+  "SCRNAseqPipeline.include_introns_flags": ["true", "true"],
+  "SCRNAseqPipeline.hashing_flags": [false, false],
+  "SCRNAseqPipeline.hashing_fastq_r1": ["", ""],
+  "SCRNAseqPipeline.hashing_fastq_r2": ["", ""],
+  "SCRNAseqPipeline.hashing_tag_files": ["", ""],
+
+  "SCRNAseqPipeline.transcriptome_gcs_path": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/references/refdata-gex-GRCh38-2024-A",
+  "SCRNAseqPipeline.mito_file": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/mito_genes.csv",
+
+  "SCRNAseqPipeline.batch_name": "insular_cortex_pilot",
+  "SCRNAseqPipeline.run_prefix": "INS_pilot",
+
+  "SCRNAseqPipeline.run_cellbender": true,
+  "SCRNAseqPipeline.billing_project": "",
+
+  "SCRNAseqPipeline.cellranger_docker": "majidfarhadloo/scrna_processing_cellranger:latest",
+  "SCRNAseqPipeline.cellbender_docker": "us.gcr.io/broad-dsde-methods/cellbender:0.3.0",
+  "SCRNAseqPipeline.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:latest"
+}

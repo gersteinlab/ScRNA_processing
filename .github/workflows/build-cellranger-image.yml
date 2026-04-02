@@ -1,0 +1,175 @@
+# .github/workflows/build-cellranger-image.yml
+#
+# Automatically builds and pushes the CellRanger Docker image to Docker Hub
+# whenever any of the files that form the image are changed on the main branch.
+#
+# Image URI: docker.io/majidfarhadloo/scrna_processing_cellranger:{tag}
+#
+# Tags applied on each build:
+#   - The git tag (e.g. v1.2) if the push is a tagged release
+#   - The short git SHA (e.g. sha-a3f2c1b) for every push
+#   - "latest" for every push to main
+#
+# Requires the following GitHub Actions repository secrets:
+#   DOCKERHUB_USERNAME    – Docker Hub username (majidfarhadloo)
+#   DOCKERHUB_TOKEN       – Docker Hub Personal Access Token (read/write scope)
+#   GCP_SA_KEY            – GCP service account JSON key (base64-encoded) with
+#                           read access to the GCS bucket holding the CellRanger
+#                           tarball (Storage Object Viewer role is sufficient)
+#   CELLRANGER_GCS_PATH   – Full GCS path to the CellRanger tarball, e.g.:
+#                           gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/software/cellranger-8.0.1.tar.gz
+
+name: Build and Push CellRanger Docker Image
+
+on:
+  push:
+    branches:
+      - main
+    # Only trigger when files that affect the image actually change
+    paths:
+      - "terra_wdl/Dockerfile.cellranger"
+      - "terra_wdl/cellranger_task.py"
+
+  # Allow manual triggering from the GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Optional image version tag (e.g. 1.1). Defaults to short SHA."
+        required: false
+        default: ""
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: majidfarhadloo/scrna_processing_cellranger
+
+jobs:
+  build-and-push:
+    name: Build and push CellRanger image
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      # ----------------------------------------------------------------
+      # 1. Check out the repository
+      # ----------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------
+      # 2. Authenticate to GCP and download the CellRanger tarball
+      #    The tarball is too large to store in git; it lives in GCS.
+      #    GCP_SA_KEY must be a base64-encoded service account JSON key.
+      #    CELLRANGER_GCS_PATH must be the full gs:// path to the tarball.
+      # ----------------------------------------------------------------
+      - name: Authenticate to Google Cloud
+        run: |
+          echo "${{ secrets.GCP_SA_KEY }}" | base64 --decode > /tmp/gcp_sa_key.json
+          gcloud auth activate-service-account --key-file=/tmp/gcp_sa_key.json
+          gcloud config set project $(cat /tmp/gcp_sa_key.json | python3 -c "import sys,json; print(json.load(sys.stdin)['project_id'])")
+
+      - name: Download CellRanger tarball from GCS
+        run: |
+          echo "Downloading CellRanger tarball from: ${{ secrets.CELLRANGER_GCS_PATH }}"
+          gsutil cp "${{ secrets.CELLRANGER_GCS_PATH }}" terra_wdl/
+          # Verify the tarball was downloaded
+          ls -lh terra_wdl/cellranger-*.tar.gz
+          echo "Download complete."
+
+      # ----------------------------------------------------------------
+      # 3. Log in to Docker Hub using repository secrets
+      #    DOCKERHUB_USERNAME and DOCKERHUB_TOKEN must be set in:
+      #    GitHub -> repo Settings -> Secrets and variables -> Actions
+      # ----------------------------------------------------------------
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # ----------------------------------------------------------------
+      # 4. Determine image tags
+      #    - If triggered manually with a tag -> use that tag
+      #    - If triggered by a git tag push -> use the git tag
+      #    - Always also tag with the short SHA and "latest"
+      # ----------------------------------------------------------------
+      - name: Determine image tags
+        id: tags
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          BASE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+
+          # Start with sha and latest tags
+          TAGS="${BASE}:sha-${SHORT_SHA},${BASE}:latest"
+
+          # Add git release tag if this push is a tag
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            GIT_TAG="${{ github.ref_name }}"
+            TAGS="${TAGS},${BASE}:${GIT_TAG}"
+            echo "Building release tag: ${GIT_TAG}"
+          fi
+
+          # Add manually specified tag if provided via workflow_dispatch
+          MANUAL_TAG="${{ github.event.inputs.tag }}"
+          if [[ -n "${MANUAL_TAG}" ]]; then
+            TAGS="${TAGS},${BASE}:${MANUAL_TAG}"
+            echo "Building manual tag: ${MANUAL_TAG}"
+          fi
+
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+          echo "Final tags: ${TAGS}"
+
+      # ----------------------------------------------------------------
+      # 5. Set up Docker Buildx for efficient layer caching
+      # ----------------------------------------------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ----------------------------------------------------------------
+      # 6. Build and push the image
+      #    The Dockerfile.cellranger expects:
+      #      COPY terra_wdl/cellranger-<VERSION>.tar.gz  (downloaded in step 2)
+      #      COPY terra_wdl/cellranger_task.py
+      #    Build context is the repo root so these paths resolve correctly.
+      # ----------------------------------------------------------------
+      - name: Build and push CellRanger image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: terra_wdl/Dockerfile.cellranger
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          # Cache layers from the previous build to speed up rebuilds
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to:   type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+
+      # ----------------------------------------------------------------
+      # 7. Print a summary of what was pushed
+      # ----------------------------------------------------------------
+      - name: Image build summary
+        run: |
+          echo "### CellRanger image pushed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags pushed:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.tags.outputs.tags }}" | tr ',' '\n' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next step:** In Terra's workflow input form, set \`cellranger_docker\` to:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-$(echo '${{ github.sha }}' | cut -c1-7)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "Image is public on Docker Hub -- no further visibility changes required." >> $GITHUB_STEP_SUMMARY
+
+      # ----------------------------------------------------------------
+      # 8. Clean up GCP credentials
+      # ----------------------------------------------------------------
+      - name: Clean up GCP credentials
+        if: always()
+        run: rm -f /tmp/gcp_sa_key.json
