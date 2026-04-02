@@ -5,14 +5,14 @@
 #
 # -- Local build instructions --------------------------------------------------
 # 1. Download the CellRanger tarball from GCS:
-#      gsutil cp gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/software/cellranger-8.0.1.tar.gz terra_wdl/
+#      gsutil cp gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/software/cellranger-10.0.0.tar.gz terra_wdl/
 # 2. Build from the repo root (build context must be repo root for COPY paths):
 #      docker build -f terra_wdl/Dockerfile.cellranger -t majidfarhadloo/scrna_processing_cellranger:latest .
 #
 # -- CI/CD build (GitHub Actions) ---------------------------------------------
 # The build-cellranger-image.yml workflow downloads the tarball from GCS using
 # a GCP service account key stored in the GCP_SA_KEY secret, places it at
-# terra_wdl/cellranger-8.0.1.tar.gz inside the build context, then runs this
+# terra_wdl/cellranger-10.0.0.tar.gz inside the build context, then runs this
 # Dockerfile. The tarball path in GCS is stored in the CELLRANGER_GCS_PATH secret.
 # -----------------------------------------------------------------------------
 
@@ -52,7 +52,7 @@ RUN curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
 # context at terra_wdl/cellranger-<VERSION>.tar.gz before building.
 #   * Local:  copy manually from GCS (see instructions above)
 #   * CI/CD:  downloaded automatically by build-cellranger-image.yml
-ARG CELLRANGER_VERSION=8.0.1
+ARG CELLRANGER_VERSION=10.0.0
 COPY terra_wdl/cellranger-${CELLRANGER_VERSION}.tar.gz /tmp/cellranger.tar.gz
 
 RUN tar -xzf /tmp/cellranger.tar.gz -C /opt/ \

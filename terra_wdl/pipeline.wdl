@@ -14,7 +14,7 @@
 ## Docker images:
 ##   cellranger_docker  – majidfarhadloo/scrna_processing_cellranger:latest
 ##                        (built by .github/workflows/build-cellranger-image.yml)
-##                        contains: cellranger 8.0.1, gsutil, Python 3
+##                        contains: cellranger 10.0.0, gsutil, Python 3
 ##   cellbender_docker  – must contain: cellbender, CUDA drivers, Python 3
 ##   pegasus_docker     – majidfarhadloo/scrna_processing_pegasus:latest
 ##                        (built by .github/workflows/build-pegasus-image.yml)
