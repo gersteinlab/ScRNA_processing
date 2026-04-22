@@ -1,0 +1,60 @@
+{
+  "SCRNAseqPipeline.skip_cellranger": true,
+  "SCRNAseqPipeline.run_cellbender": false,
+
+  "SCRNAseqPipeline.sample_tags": [
+    "HCcFW_07_BA9-FC_21A",
+    "HCcHO_05_BA9-FC_21A",
+    "HCcLS_01_BA9-FC_21A",
+    "HCcOE_06_BA9-FC_21A",
+    "HCcOV_03_BA9-FC_21A",
+    "HCcPN_02_BA9-FC_21A",
+    "HccUD_10_BA9-FC_21A",
+    "HCcWK_12_BA9-FC_21A",
+    "HCtPA_16_BA9-FC_21A",
+    "HCCCX_PFC",
+    "HCCDE_PFC",
+    "NIH967_PFC",
+    "NIH1055_PFC"
+  ],
+
+  "SCRNAseqPipeline.hashing_flags": [
+    false, false, false, false, false, false, false, false, false,
+    false, false, false, false
+  ],
+
+  "SCRNAseqPipeline.precomputed_h5_urls": [
+    "https://data.nemoarchive.org/scorch/grant/U01DA053631_kellis/Kellis/multimodal/nuclei/10xMultiome_RNAseq/human/processed/counts/VXJG6R5O_HCcFW_07_BA9-FC_21A_gex_out_filtered.h5",
+    "https://data.nemoarchive.org/scorch/grant/U01DA053631_kellis/Kellis/multimodal/nuclei/10xMultiome_RNAseq/human/processed/counts/EN4RD1YI_HCcHO_05_BA9-FC_21A_gex_out_filtered.h5",
+    "https://data.nemoarchive.org/scorch/grant/U01DA053631_kellis/Kellis/multimodal/nuclei/10xMultiome_RNAseq/human/processed/counts/CGKYR6GA_HCcLS_01_BA9-FC_21A_gex_out_filtered.h5",
+    "https://data.nemoarchive.org/scorch/grant/U01DA053631_kellis/Kellis/multimodal/nuclei/10xMultiome_RNAseq/human/processed/counts/KOEW22HH_HCcOE_06_BA9-FC_21A_gex_out_filtered.h5",
+    "https://data.nemoarchive.org/scorch/grant/U01DA053631_kellis/Kellis/multimodal/nuclei/10xMultiome_RNAseq/human/processed/counts/OE4DU7EB_HCcOV_03_BA9-FC_21A_gex_out_filtered.h5",
+    "https://data.nemoarchive.org/scorch/grant/U01DA053631_kellis/Kellis/multimodal/nuclei/10xMultiome_RNAseq/human/processed/counts/LMDO16AF_HCcPN_02_BA9-FC_21A_gex_out_filtered.h5",
+    "https://data.nemoarchive.org/scorch/grant/U01DA053631_kellis/Kellis/multimodal/nuclei/10xMultiome_RNAseq/human/processed/counts/XXDSXC49_HccUD_10_BA9-FC_21A_gex_out_filtered.h5",
+    "https://data.nemoarchive.org/scorch/grant/U01DA053631_kellis/Kellis/multimodal/nuclei/10xMultiome_RNAseq/human/processed/counts/ME9BCI3X_HCcWK_12_BA9-FC_21A_gex_out_filtered.h5",
+    "https://data.nemoarchive.org/scorch/grant/U01DA053631_kellis/Kellis/multimodal/nuclei/10xMultiome_RNAseq/human/processed/counts/PG020SW9_HCtPA_16_BA9-FC_21A_gex_out_filtered.h5",
+    "https://data.nemoarchive.org/scorch/grant/UM1DA051410_spudich/Spudich/multimodal/nuclei/10xMultiome_RNAseq/human/processed/counts/HCCCX_PFC_MAH_S7_L003/2Z3I5QV1_HCCCX_PFC_gex_out_filtered.h5",
+    "https://data.nemoarchive.org/scorch/grant/UM1DA051410_spudich/Spudich/multimodal/nuclei/10xMultiome_RNAseq/human/processed/counts/HCCDE_PFC_MAH_S5_L003/BR92NI1X_HCCDE_PFC_gex_out_filtered.h5",
+    "https://data.nemoarchive.org/scorch/grant/UM1DA051410_spudich/Spudich/multimodal/nuclei/10xMultiome_RNAseq/human/processed/counts/NIH967_PFC_RNAseq_01/QIEZI5TJ_NIH967_PFC_gex_out_filtered.h5",
+    "https://data.nemoarchive.org/scorch/grant/UM1DA051410_spudich/Spudich/multimodal/nuclei/10xMultiome_RNAseq/human/processed/counts/NIH1055_PFC_RNAseq_01/YBVTN93L_NIH1055_PFC_gex_out_filtered.h5"
+  ],
+
+  "SCRNAseqPipeline.batch_name": "pfc_pilot_batch",
+  "SCRNAseqPipeline.run_prefix": "PFC_pilot",
+
+  "SCRNAseqPipeline.mito_file": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/mito_genes.csv",
+
+  "SCRNAseqPipeline.pegasus_cpu": 16,
+  "SCRNAseqPipeline.pegasus_mem_gb": 128,
+  "SCRNAseqPipeline.pegasus_disk_gb": 200,
+  "SCRNAseqPipeline.localize_h5_disk_gb": 150,
+
+  "SCRNAseqPipeline.qc_min_umis": 500,
+  "SCRNAseqPipeline.qc_percent_mito": 10,
+  "SCRNAseqPipeline.qc_min_genes": 200,
+  "SCRNAseqPipeline.n_jobs_pg": 10,
+  "SCRNAseqPipeline.hvg_n_top": 5000,
+  "SCRNAseqPipeline.dd_bst_n_iters": 25,
+  "SCRNAseqPipeline.dd_pred_pthresh": 0.0000000000000001,
+  "SCRNAseqPipeline.dd_pred_voterthresh": 0.3
+}

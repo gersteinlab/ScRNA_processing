@@ -11,6 +11,11 @@
 ## Use generate_sample_table.py locally to produce sample_table.tsv and
 ## sample_set_table.tsv before uploading to Terra.
 ##
+## Pilot / bypass mode (skip_cellranger = true):
+##   Provide precomputed_h5_urls (HTTPS or gs:// URLs to CellBender-filtered .h5 files).
+##   Stages 1, 1b, and 2 are skipped entirely; each URL is downloaded by LocalizeH5
+##   and the resulting files are passed directly to Pegasus (Stage 3).
+##
 ## Docker images:
 ##   cellranger_docker  – majidfarhadloo/scrna_processing_cellranger:latest
 ##                        (built by .github/workflows/build-cellranger-image.yml)
@@ -34,34 +39,52 @@ workflow SCRNAseqPipeline {
     # All arrays must have the same length.
     # -----------------------------------------------------------------------
 
-    ## GCS paths to per-sample FASTQ directories (folders, not individual files)
-    Array[String] fastq_dirs
-
     ## Sample name matching the FASTQ file prefix (CellRanger --sample / --id)
+    ## Also used as metadata labels by Pegasus regardless of skip_cellranger mode.
     Array[String] sample_tags
 
-    ## 10x chemistry: "v2", "v3", or "auto"
-    Array[String] chemistry_flags
-
-    ## "true" / "false" – include intronic reads (snRNA-seq = true)
-    Array[String] include_introns_flags
-
-    ## Whether each sample has cell hashing (parallel to sample arrays)
+    ## Whether each sample has cell hashing (parallel to sample arrays).
+    ## Required even when skip_cellranger=true so Pegasus knows hashing status.
     Array[Boolean] hashing_flags
 
+    # -----------------------------------------------------------------------
+    # Stage 1 inputs – only required when skip_cellranger = false
+    # -----------------------------------------------------------------------
+
+    ## GCS paths to per-sample FASTQ directories (folders, not individual files)
+    Array[String] fastq_dirs = []
+
+    ## 10x chemistry: "v2", "v3", or "auto"
+    Array[String] chemistry_flags = []
+
+    ## "true" / "false" – include intronic reads (snRNA-seq = true)
+    Array[String] include_introns_flags = []
+
     ## Hashing FASTQ R1 / R2 paths (empty string "" for non-hashed samples)
-    Array[String] hashing_fastq_r1
-    Array[String] hashing_fastq_r2
+    Array[String] hashing_fastq_r1 = []
+    Array[String] hashing_fastq_r2 = []
 
     ## Cell-hashing tag CSV paths (empty string "" for non-hashed samples)
-    Array[String] hashing_tag_files
+    Array[String] hashing_tag_files = []
+
+    ## GCS path to CellRanger reference transcriptome directory
+    String transcriptome_gcs_path = ""
+
+    # -----------------------------------------------------------------------
+    # Bypass / pilot mode
+    # -----------------------------------------------------------------------
+
+    ## Set true to skip Stages 1, 1b, 2 entirely.
+    ## Requires precomputed_h5_urls to be provided (same length as sample_tags).
+    Boolean skip_cellranger = false
+
+    ## HTTPS or gs:// URLs to pre-processed (CellBender-filtered) .h5 files,
+    ## one per sample. Only used when skip_cellranger = true.
+    Array[String] precomputed_h5_urls = []
 
     # -----------------------------------------------------------------------
     # Shared reference inputs
     # -----------------------------------------------------------------------
-
-    ## GCS path to CellRanger reference transcriptome directory
-    String transcriptome_gcs_path
 
     ## GCS path to mitochondrial gene list CSV (used by Pegasus)
     File mito_file
@@ -80,7 +103,8 @@ workflow SCRNAseqPipeline {
     # Pipeline flags
     # -----------------------------------------------------------------------
 
-    ## Run CellBender ambient RNA removal (requires GPU worker)
+    ## Run CellBender ambient RNA removal (requires GPU worker).
+    ## Ignored when skip_cellranger = true.
     Boolean run_cellbender = true
 
     ## GCP billing project for requester-pays GCS buckets (e.g. "terra-4ea165c8").
@@ -92,26 +116,29 @@ workflow SCRNAseqPipeline {
     # without editing the WDL)
     # -----------------------------------------------------------------------
 
-    String cellranger_docker = "majidfarhadloo/scrna_processing_cellranger:latest"
-    String cellbender_docker = "us.gcr.io/broad-dsde-methods/cellbender:0.3.0"
-    String pegasus_docker    = "majidfarhadloo/scrna_processing_pegasus:latest"
+    String cellranger_docker  = "majidfarhadloo/scrna_processing_cellranger:latest"
+    String cellbender_docker  = "us.gcr.io/broad-dsde-methods/cellbender:0.3.0"
+    String pegasus_docker     = "majidfarhadloo/scrna_processing_pegasus:latest"
+    String localize_h5_docker = "ubuntu:22.04"
 
     # -----------------------------------------------------------------------
     # Resource tuning (optional overrides)
     # -----------------------------------------------------------------------
 
-    Int cellranger_cpu    = 16
-    Int cellranger_mem_gb = 64
+    Int cellranger_cpu     = 16
+    Int cellranger_mem_gb  = 64
     Int cellranger_disk_gb = 500
 
-    Int cellbender_gpu    = 1
-    Int cellbender_cpu    = 4
-    Int cellbender_mem_gb = 32
+    Int cellbender_gpu     = 1
+    Int cellbender_cpu     = 4
+    Int cellbender_mem_gb  = 32
     Int cellbender_disk_gb = 100
 
-    Int pegasus_cpu    = 16
-    Int pegasus_mem_gb = 128
+    Int pegasus_cpu     = 16
+    Int pegasus_mem_gb  = 128
     Int pegasus_disk_gb = 200
+
+    Int localize_h5_disk_gb = 150
 
     # -----------------------------------------------------------------------
     # QC / algorithm parameters (Pegasus defaults match original pipeline)
@@ -130,79 +157,102 @@ workflow SCRNAseqPipeline {
   }
 
   # -------------------------------------------------------------------------
-  # Stage 1: CellRanger count – one task per sample
+  # Bypass mode: localize pre-computed h5 files from HTTPS / GCS URLs
+  # -------------------------------------------------------------------------
+
+  scatter (url in precomputed_h5_urls) {
+    call LocalizeH5 {
+      input:
+        url     = url,
+        docker  = localize_h5_docker,
+        disk_gb = localize_h5_disk_gb
+    }
+  }
+
+  # -------------------------------------------------------------------------
+  # Stage 1 / 1b / 2: CellRanger → CITE-seq-Count → CellBender
+  # Skipped entirely when skip_cellranger = true.
   # -------------------------------------------------------------------------
 
   scatter (i in range(length(sample_tags))) {
-    call CellRangerCount {
-      input:
-        fastq_dir       = fastq_dirs[i],
-        sample_tag      = sample_tags[i],
-        transcriptome   = transcriptome_gcs_path,
-        chemistry       = chemistry_flags[i],
-        include_introns = include_introns_flags[i],
-        numproc         = cellranger_cpu,
-        localmem        = cellranger_mem_gb,
-        min_umi_check   = min_umi_check,
-        billing_project = billing_project,
-        docker          = cellranger_docker,
-        cpu             = cellranger_cpu,
-        mem_gb          = cellranger_mem_gb,
-        disk_gb         = cellranger_disk_gb
-    }
 
-    # -----------------------------------------------------------------------
-    # Stage 1b: CITE-seq-Count – only for hashed samples
-    # -----------------------------------------------------------------------
+    if (!skip_cellranger) {
 
-    if (hashing_flags[i]) {
-      call CiteSeqCount {
+      # ---------------------------------------------------------------------
+      # Stage 1: CellRanger count
+      # ---------------------------------------------------------------------
+      call CellRangerCount {
         input:
+          fastq_dir       = fastq_dirs[i],
           sample_tag      = sample_tags[i],
-          fastq_r1        = hashing_fastq_r1[i],
-          fastq_r2        = hashing_fastq_r2[i],
-          tag_file        = hashing_tag_files[i],
+          transcriptome   = transcriptome_gcs_path,
           chemistry       = chemistry_flags[i],
-          estimated_cells = CellRangerCount.estimated_cells,
+          include_introns = include_introns_flags[i],
           numproc         = cellranger_cpu,
+          localmem        = cellranger_mem_gb,
+          min_umi_check   = min_umi_check,
           billing_project = billing_project,
-          docker          = pegasus_docker,
+          docker          = cellranger_docker,
           cpu             = cellranger_cpu,
           mem_gb          = cellranger_mem_gb,
           disk_gb         = cellranger_disk_gb
       }
-    }
 
-    # -----------------------------------------------------------------------
-    # Stage 2: CellBender – optional, one task per sample
-    # -----------------------------------------------------------------------
+      # ---------------------------------------------------------------------
+      # Stage 1b: CITE-seq-Count – only for hashed samples
+      # ---------------------------------------------------------------------
+      if (hashing_flags[i]) {
+        call CiteSeqCount {
+          input:
+            sample_tag      = sample_tags[i],
+            fastq_r1        = hashing_fastq_r1[i],
+            fastq_r2        = hashing_fastq_r2[i],
+            tag_file        = hashing_tag_files[i],
+            chemistry       = chemistry_flags[i],
+            estimated_cells = select_first([CellRangerCount.estimated_cells]),
+            numproc         = cellranger_cpu,
+            billing_project = billing_project,
+            docker          = pegasus_docker,
+            cpu             = cellranger_cpu,
+            mem_gb          = cellranger_mem_gb,
+            disk_gb         = cellranger_disk_gb
+        }
+      }
 
-    if (run_cellbender) {
-      call CellBender {
-        input:
-          sample_tag      = sample_tags[i],
-          input_h5        = CellRangerCount.raw_h5,
-          expected_cells  = CellRangerCount.estimated_cells,
-          epochs          = cellbender_epochs,
-          fpr             = cellbender_fpr,
-          docker          = cellbender_docker,
-          gpu             = cellbender_gpu,
-          cpu             = cellbender_cpu,
-          mem_gb          = cellbender_mem_gb,
-          disk_gb         = cellbender_disk_gb
+      # ---------------------------------------------------------------------
+      # Stage 2: CellBender – optional, one task per sample
+      # ---------------------------------------------------------------------
+      if (run_cellbender) {
+        call CellBender {
+          input:
+            sample_tag      = sample_tags[i],
+            input_h5        = select_first([CellRangerCount.raw_h5]),
+            expected_cells  = select_first([CellRangerCount.estimated_cells]),
+            epochs          = cellbender_epochs,
+            fpr             = cellbender_fpr,
+            docker          = cellbender_docker,
+            gpu             = cellbender_gpu,
+            cpu             = cellbender_cpu,
+            mem_gb          = cellbender_mem_gb,
+            disk_gb         = cellbender_disk_gb
+        }
       }
     }
   }
 
   # -------------------------------------------------------------------------
-  # Resolve the H5 list passed to Pegasus:
-  #   - If CellBender ran: use cb_filtered_h5 (non-optional version via select_first)
-  #   - If CellBender skipped: use CellRanger filtered_feature_bc_matrix.h5
+  # Resolve the h5 list passed to Pegasus:
+  #   skip_cellranger=true  → use files localized by LocalizeH5
+  #   skip_cellranger=false, run_cellbender=true  → CellBender filtered h5
+  #   skip_cellranger=false, run_cellbender=false → CellRanger filtered h5
   # -------------------------------------------------------------------------
 
-  Array[String] h5_for_pegasus = if run_cellbender
-    then select_all(CellBender.cb_filtered_h5)
-    else CellRangerCount.filtered_h5
+  Array[File] h5_for_pegasus =
+    if skip_cellranger
+    then LocalizeH5.h5_file
+    else if run_cellbender
+      then select_all(CellBender.cb_filtered_h5)
+      else select_all(CellRangerCount.filtered_h5)
 
   # -------------------------------------------------------------------------
   # Stage 3: Pegasus – one task for the whole batch
@@ -213,7 +263,7 @@ workflow SCRNAseqPipeline {
       batch_name          = batch_name,
       run_prefix          = run_prefix,
       sample_tags         = sample_tags,
-      h5_paths            = h5_for_pegasus,
+      h5_files            = h5_for_pegasus,
       hto_count_dirs      = select_all(CiteSeqCount.hto_count_dir),
       hashing_flags       = hashing_flags,
       mito_file           = mito_file,
@@ -236,20 +286,60 @@ workflow SCRNAseqPipeline {
   # -------------------------------------------------------------------------
 
   output {
-    # CellRanger per-sample outputs
-    Array[File]    cr_raw_h5              = CellRangerCount.raw_h5
-    Array[File]    cr_filtered_h5         = CellRangerCount.filtered_h5
-    Array[File]    cr_molecule_info       = CellRangerCount.molecule_info
-    Array[File]    cr_metrics_csv         = CellRangerCount.metrics_csv
-    Array[Int]     cr_estimated_cells     = CellRangerCount.estimated_cells
-    Array[Boolean] cr_low_quality_flags   = CellRangerCount.is_low_quality
+    # CellRanger per-sample outputs (empty when skip_cellranger=true)
+    Array[File?]    cr_raw_h5            = CellRangerCount.raw_h5
+    Array[File?]    cr_filtered_h5       = CellRangerCount.filtered_h5
+    Array[File?]    cr_molecule_info     = CellRangerCount.molecule_info
+    Array[File?]    cr_metrics_csv       = CellRangerCount.metrics_csv
+    Array[Int?]     cr_estimated_cells   = CellRangerCount.estimated_cells
+    Array[Boolean?] cr_low_quality_flags = CellRangerCount.is_low_quality
 
-    # CellBender per-sample outputs (only present when run_cellbender=true)
-    Array[File]    cb_filtered_h5_list    = select_all(CellBender.cb_filtered_h5)
+    # CellBender per-sample outputs (empty when skip_cellranger=true or run_cellbender=false)
+    Array[File?]    cb_filtered_h5_list  = CellBender.cb_filtered_h5
 
     # Pegasus batch outputs
-    File           pegasus_output_tar     = PegasusPipeline.output_tar
-    File           pegasus_summary        = PegasusPipeline.summary_stats
+    File            pegasus_output_tar   = PegasusPipeline.output_tar
+    File            pegasus_summary      = PegasusPipeline.summary_stats
+  }
+}
+
+
+# ---------------------------------------------------------------------------
+# TASK: LocalizeH5
+# Downloads a single .h5 file from an HTTPS or gs:// URL.
+# Used in bypass mode (skip_cellranger = true) to stage pre-processed h5 files
+# before passing them to Pegasus.
+# ---------------------------------------------------------------------------
+
+task LocalizeH5 {
+  input {
+    String url
+
+    String docker  = "ubuntu:22.04"
+    Int    disk_gb = 150
+  }
+
+  command <<<
+    set -euo pipefail
+    apt-get update -qq && apt-get install -y -qq curl ca-certificates
+
+    echo "Downloading: ~{url}"
+    curl -L --retry 5 --retry-delay 10 --retry-max-time 300 \
+      -o downloaded.h5 "~{url}"
+
+    echo "Download complete. File size: $(du -sh downloaded.h5 | cut -f1)"
+  >>>
+
+  output {
+    File h5_file = "downloaded.h5"
+  }
+
+  runtime {
+    docker:      docker
+    cpu:         2
+    memory:      "4 GB"
+    disks:       "local-disk ~{disk_gb} HDD"
+    preemptible: 2
   }
 }
 
@@ -363,7 +453,7 @@ task CiteSeqCount {
   >>>
 
   output {
-    File   hto_count_dir = read_string("hto_count_dir.txt")
+    File   hto_count_dir      = read_string("hto_count_dir.txt")
     String hto_count_dir_path = read_string("hto_count_dir.txt")
   }
 
@@ -433,8 +523,8 @@ task PegasusPipeline {
     String         batch_name
     String         run_prefix
     Array[String]  sample_tags
-    Array[String]  h5_paths
-    Array[String]  hto_count_dirs    # empty array when no hashing in batch
+    Array[File]    h5_files              # localized h5 files (one per sample)
+    Array[String]  hto_count_dirs        # empty array when no hashing in batch
     Array[Boolean] hashing_flags
     File           mito_file
     Int            n_jobs_pg           = 10
@@ -467,12 +557,13 @@ task PegasusPipeline {
 import json, sys, os
 
 sample_tags    = '~{sep="," sample_tags}'.split(",")
-h5_paths       = '~{sep="," h5_paths}'.split(",")
+h5_files       = '~{sep="," h5_files}'.split(",")
 hashing_flags  = '~{sep="," hashing_flags}'.split(",")    # "true"/"false" strings
 hto_dirs       = '~{sep="," hto_count_dirs}'.split(",")
 
 # matrix_directory: list of [sample_tag, h5_path]
-matrix_directory = [[t.strip(), p.strip()] for t, p in zip(sample_tags, h5_paths)]
+# h5_files are Cromwell-localized local paths
+matrix_directory = [[t.strip(), p.strip()] for t, p in zip(sample_tags, h5_files)]
 
 # Batch-level hashing: True if ANY sample in batch is hashed
 batch_hashing = any(f.strip().lower() == "true" for f in hashing_flags)
@@ -511,7 +602,7 @@ PYEOF
     # ------------------------------------------------------------------
     JSONFILE="~{run_prefix}_~{batch_name}_pg_input.json"
 
-    python /opt/pipeline/Pegasus-Pipeline.py \
+    python3 /opt/pipeline/Pegasus-Pipeline.py \
       -J "${JSONFILE}" \
       -S "~{batch_name}"
 
