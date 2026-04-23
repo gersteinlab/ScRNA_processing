@@ -56,5 +56,7 @@
   "SCRNAseqPipeline.hvg_n_top": 5000,
   "SCRNAseqPipeline.dd_bst_n_iters": 25,
   "SCRNAseqPipeline.dd_pred_pthresh": 0.0000000000000001,
-  "SCRNAseqPipeline.dd_pred_voterthresh": 0.3
+  "SCRNAseqPipeline.dd_pred_voterthresh": 0.3,
+
+  "SCRNAseqPipeline.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:sha-92ef0d0"
 }
