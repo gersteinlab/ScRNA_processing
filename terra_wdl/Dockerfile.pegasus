@@ -36,6 +36,12 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 COPY terra_wdl/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
+# Reinstall setuptools after full dependency resolution.
+# pegasus imports pkg_resources (part of setuptools) at startup; pip's resolver
+# can silently remove/downgrade setuptools while resolving the pegasus ecosystem,
+# so we force-reinstall it as the final layer to guarantee it is always present.
+RUN pip install --no-cache-dir --force-reinstall "setuptools>=65.0"
+
 # Create pipeline directory and copy scripts + marker reference files
 RUN mkdir -p /opt/pipeline
 
