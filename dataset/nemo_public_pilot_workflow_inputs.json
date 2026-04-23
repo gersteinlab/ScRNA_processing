@@ -58,5 +58,5 @@
   "SCRNAseqPipeline.dd_pred_pthresh": 0.0000000000000001,
   "SCRNAseqPipeline.dd_pred_voterthresh": 0.3,
 
-  "SCRNAseqPipeline.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:sha-fcd59b8"
+  "SCRNAseqPipeline.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:sha-bef1d84"
 }
