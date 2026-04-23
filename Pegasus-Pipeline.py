@@ -53,6 +53,15 @@ def patch_cellbender_h5(path):
                 feat.create_dataset('genome', data=[b'GRCh38'] * n, dtype=dt)
                 print(f"patch_cellbender_h5: rewrote genome to 'GRCh38' ({n} features) in {path}")
 
+def _ensure_multimodal(data):
+    """Wrap data in MultimodalData if it isn't one already.
+    Slicing/copying a MultimodalData can return either UnimodalData or
+    MultimodalData depending on the pegasusio version; this helper
+    handles both cases safely."""
+    if isinstance(data, MultimodalData):
+        return data
+    return MultimodalData(data)
+
 #############################################################################################
 if __name__=="__main__":
     ###Setting up program parameters annd optionns available to the user
@@ -174,7 +183,7 @@ if __name__=="__main__":
                 non_mito_list.append(True)
         data_subset = data[:, non_mito_list].copy()
         data = data_subset
-        data = MultimodalData(data)
+        data = _ensure_multimodal(data)
         print(data)
         summary_file.write("\nSize of count matrix post mito gene filtration:"+str(data.X.get_shape()))
         summary_file.write("\n")
@@ -217,7 +226,7 @@ if __name__=="__main__":
             pg.demultiplex(data, hto_data)
             data_subset = data[data.obs["demux_type"] == "singlet",:].copy()
             data = data_subset
-            data = MultimodalData(data)
+            data = _ensure_multimodal(data)
             print(data)
 
             summary_file.write("\nSize of count matrix post hashing:"+str(data.X.get_shape()))
@@ -236,7 +245,7 @@ if __name__=="__main__":
             print(doublet)
             data_subset = data[data.obs["doublet"] == False,:].copy()
             data = data_subset
-            data = MultimodalData(data)
+            data = _ensure_multimodal(data)
 
             summary_file.write("\nSize of count matrix post doublet filtration:"+str(data.X.get_shape()))
             summary_file.write("\n")
@@ -254,7 +263,7 @@ if __name__=="__main__":
         print(doublets)
         data_subset = data[data.obs["doublet"] == 0,:].copy()
         data = data_subset
-        data = MultimodalData(data)
+        data = _ensure_multimodal(data)
         data.select_matrix('X')
         #data_TPM_norm = data_TPM.copy()
         #data_TPM_norm.X = (10**6)*normalize(data_TPM.X,norm='l1',axis=1)
@@ -362,7 +371,7 @@ if __name__=="__main__":
         HTOnames = set(data.obs["assignment"].values)
         print(f"Sample names = {HTOnames}")
         for sample in HTOnames:
-            data_sample = MultimodalData(data[data.obs["assignment"]==sample,:].copy())
+            data_sample = _ensure_multimodal(data[data.obs["assignment"]==sample,:].copy())
             dataset_anndata = f"{samplename}/{batchname}_{sample}_Processed.h5ad"
             pg.write_output(data_sample,dataset_anndata)
     # data_TPM_norm.obs[['leiden_labels']] = data.obs[['leiden_labels']]
