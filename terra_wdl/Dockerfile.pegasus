@@ -36,11 +36,17 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 COPY terra_wdl/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Reinstall setuptools after full dependency resolution.
-# pegasus imports pkg_resources (part of setuptools) at startup; pip's resolver
-# can silently remove/downgrade setuptools while resolving the pegasus ecosystem,
-# so we force-reinstall it as the final layer to guarantee it is always present.
-RUN pip install --no-cache-dir --force-reinstall "setuptools>=65.0"
+# ── Hard fix for pkg_resources / setuptools ──────────────────────────
+# pegasus imports pkg_resources (part of setuptools) at startup.
+# pip's dependency resolver has been observed silently uninstalling or
+# downgrading setuptools while resolving the pegasus ecosystem above.
+#
+# Fix: force-reinstall setuptools with --no-deps so pip CANNOT remove it
+# as a side-effect, then verify with a Python import that will FAIL THE
+# BUILD if pkg_resources is not importable.
+RUN pip install --no-cache-dir --force-reinstall --no-deps "setuptools>=65.0" \
+    && python -c "import pkg_resources; print('pkg_resources OK:', pkg_resources.__version__)" \
+    && python -c "import pegasus; print('pegasus import OK')"
 
 # Create pipeline directory and copy scripts + marker reference files
 RUN mkdir -p /opt/pipeline

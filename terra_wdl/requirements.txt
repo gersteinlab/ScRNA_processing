@@ -4,10 +4,9 @@
 # Strategy: pin pegasuspy and packages our code directly imports;
 # let pip resolve the pegasus ecosystem (igraph, leidenalg, anndata, etc.)
 # to avoid version conflicts within that tightly-coupled dependency tree.
-
-# Build toolchain – must be pinned explicitly so it survives full pip dependency
-# resolution. pkg_resources (part of setuptools) is imported by pegasus at runtime.
-setuptools>=65.0
+#
+# NOTE: setuptools (pkg_resources) is handled directly in the Dockerfile,
+# NOT here — see the "Hard fix for pkg_resources" block in Dockerfile.pegasus.
 
 # Core single-cell analysis
 # NOTE: PyPI package name is pegasuspy (not pegasus); imports as `import pegasus`
