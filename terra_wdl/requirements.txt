@@ -18,6 +18,11 @@ doubletdetection==4.2
 # Harmony batch correction (harmonypy API used directly in Pegasus-Pipeline.py)
 harmonypy==0.0.9
 
+# HDF5 file I/O — used directly in Pegasus-Pipeline.py to patch NeMo h5 files
+# (feature_type/genome fields are 'NA' from STARsolo/Optimus; must be patched to
+#  'Gene Expression'/'GRCh38' so pegasusio assigns modality='rna' correctly)
+h5py>=3.7.0
+
 # Plotting (pinned — used directly in Pegasus-Pipeline.py)
 matplotlib==3.7.5
 seaborn==0.13.2

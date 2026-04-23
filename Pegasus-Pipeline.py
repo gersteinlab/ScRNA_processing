@@ -7,6 +7,7 @@ import seaborn as sns
 import json
 import csv
 import re
+import h5py
 import doubletdetection as dd
 import scrublet as scr
 
@@ -19,6 +20,38 @@ import time
 import random
 import argparse
 import multiprocessing as mp
+
+#############################################################################################
+def patch_cellbender_h5(path):
+    """Patch STARsolo/Optimus CellBender h5 files that have 'NA' in
+    feature_type and genome fields.  pegasusio inspects these fields to assign
+    a modality; 'NA' causes it to fall through to modality='custom', which
+    breaks qc_metrics, log_norm, HVG, etc.  This function rewrites them
+    in-place to 'Gene Expression' and 'GRCh38' so pegasusio assigns
+    modality='rna' correctly."""
+    with h5py.File(path, 'r+') as f:
+        if 'matrix' not in f or 'features' not in f['matrix']:
+            print(f"patch_cellbender_h5: unexpected structure in {path}, skipping patch")
+            return
+        feat = f['matrix']['features']
+        # Fix feature_type: b'NA' / b'' / b'na' → b'Gene Expression'
+        if 'feature_type' in feat:
+            ft = feat['feature_type'][:]
+            if all(v in (b'NA', b'', b'na') for v in ft):
+                n = len(ft)
+                del feat['feature_type']
+                dt = h5py.string_dtype()
+                feat.create_dataset('feature_type', data=[b'Gene Expression'] * n, dtype=dt)
+                print(f"patch_cellbender_h5: rewrote feature_type to 'Gene Expression' ({n} features) in {path}")
+        # Fix genome: b'NA' / b'' / b'na' → b'GRCh38'
+        if 'genome' in feat:
+            gn = feat['genome'][:]
+            if all(v in (b'NA', b'', b'na') for v in gn):
+                n = len(gn)
+                del feat['genome']
+                dt = h5py.string_dtype()
+                feat.create_dataset('genome', data=[b'GRCh38'] * n, dtype=dt)
+                print(f"patch_cellbender_h5: rewrote genome to 'GRCh38' ({n} features) in {path}")
 
 #############################################################################################
 if __name__=="__main__":
@@ -98,6 +131,7 @@ if __name__=="__main__":
 
     for dataset in jdict["matrix_directory"]:
         print("Importing count matrix")
+        patch_cellbender_h5(dataset[1])
         data = pg.read_input(dataset[1])
         summary_file.write(f"\nSize of count matrix {dataset[0]} (# of obs, # of genes):"+str(data.X.get_shape()))
         summary_file.write("\n")
