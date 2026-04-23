@@ -5,6 +5,10 @@
 # let pip resolve the pegasus ecosystem (igraph, leidenalg, anndata, etc.)
 # to avoid version conflicts within that tightly-coupled dependency tree.
 
+# Build toolchain – must be pinned explicitly so it survives full pip dependency
+# resolution. pkg_resources (part of setuptools) is imported by pegasus at runtime.
+setuptools>=65.0
+
 # Core single-cell analysis
 # NOTE: PyPI package name is pegasuspy (not pegasus); imports as `import pegasus`
 pegasuspy==1.9.1.post1
