@@ -120,9 +120,11 @@ jobs:
           file: terra_wdl/Dockerfile.pegasus
           push: true
           tags: ${{ steps.tags.outputs.tags }}
-          # Cache layers from the previous build to speed up rebuilds
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-          cache-to:   type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          # TEMPORARILY disabled layer cache to debug setuptools/pkg_resources issue.
+          # Uncomment after the issue is resolved:
+          # cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          # cache-to:   type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          no-cache: true
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}

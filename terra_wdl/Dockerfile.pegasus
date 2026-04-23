@@ -33,16 +33,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir --upgrade pip "setuptools>=65.0,<70.0" wheel
 
 # Install all Python dependencies pinned in requirements.txt.
-# A pip constraint file prevents the resolver from removing/downgrading
-# setuptools during dependency resolution (the root cause of the
-# recurring "No module named 'pkg_resources'" error).
 COPY terra_wdl/requirements.txt /tmp/requirements.txt
 RUN echo "setuptools>=65.0,<70.0" > /tmp/constraints.txt \
     && PIP_CONSTRAINT=/tmp/constraints.txt pip install --no-cache-dir -r /tmp/requirements.txt
 
-# ── Build-time verification ──────────────────────────────────────────
-# If either import fails, the Docker build itself fails (red in Actions).
-RUN python -c "import pkg_resources; print('OK: pkg_resources', pkg_resources.__version__)"
+# ── Diagnostic: what happened to setuptools? ─────────────────────────
+RUN echo "=== pip list | grep setup ===" && pip list | grep -i setup \
+    && echo "=== pip show setuptools ===" && pip show setuptools || true \
+    && echo "=== find pkg_resources ===" && find /usr/local/lib -name "pkg_resources" -type d 2>/dev/null || true \
+    && echo "=== python -c import setuptools ===" && python -c "import setuptools; print(setuptools.__version__)" || true \
+    && echo "=== python -c import pkg_resources ===" && python -c "import pkg_resources; print(pkg_resources.__version__)" || echo "FAILED: pkg_resources not importable"
+
+# ── Reinstall setuptools if missing, then hard-verify ────────────────
+RUN pip install --no-cache-dir "setuptools>=65.0,<70.0" \
+    && python -c "import pkg_resources; print('OK: pkg_resources', pkg_resources.__version__)"
 RUN python -c "import pegasus; print('OK: pegasus imports successfully')"
 
 # Create pipeline directory and copy scripts + marker reference files
