@@ -41,6 +41,7 @@ RUN echo "setuptools>=65.0,<70.0" > /tmp/constraints.txt \
 # pkg_resources has no __version__ attr — just verify the import works.
 RUN python -c "import pkg_resources; print('OK: pkg_resources is importable')"
 RUN python -c "import pegasus; print('OK: pegasus imports successfully')"
+RUN pip list
 
 # Create pipeline directory and copy scripts + marker reference files
 RUN mkdir -p /opt/pipeline
