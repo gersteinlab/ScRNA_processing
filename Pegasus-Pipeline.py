@@ -95,8 +95,8 @@ if __name__=="__main__":
         os.mkdir(samplename)
 
     ###Read in jsonfile
-    f = open(jsonfile,)
-    jdict = json.load(f)
+    with open(jsonfile) as f:
+        jdict = json.load(f)
 
     ###Set default parameters
     if "qc_min_umis" not in jdict.keys():
@@ -142,13 +142,13 @@ if __name__=="__main__":
         print("Importing count matrix")
         patch_cellbender_h5(dataset[1])
         data = pg.read_input(dataset[1])
-        summary_file.write(f"\nSize of count matrix {dataset[0]} (# of obs, # of genes):"+str(data.X.get_shape()))
+        summary_file.write(f"\nSize of count matrix {dataset[0]} (# of obs, # of genes):"+str(data.X.shape))
         summary_file.write("\n")
         ###Read count matrix if only one sample
         # if len(jdict["matrix_directory"]) == 1:
         #     print("Importing count matrix")
         #     data = pg.read_input(jdict["matrix_directory"][0][1])
-        #     summary_file.write("\nSize of count matrix (# of obs, # of genes):"+str(data.X.get_shape()))
+        #     summary_file.write("\nSize of count matrix (# of obs, # of genes):"+str(data.X.shape))
         #     summary_file.write("\n")
 
         ###Read count matrix if aggregate needed (more than one sample)
@@ -185,7 +185,7 @@ if __name__=="__main__":
         data = data_subset
         data = _ensure_multimodal(data)
         print(data)
-        summary_file.write("\nSize of count matrix post mito gene filtration:"+str(data.X.get_shape()))
+        summary_file.write("\nSize of count matrix post mito gene filtration:"+str(data.X.shape))
         summary_file.write("\n")
 
         pg.identify_robust_genes(data)
@@ -229,13 +229,13 @@ if __name__=="__main__":
             data = _ensure_multimodal(data)
             print(data)
 
-            summary_file.write("\nSize of count matrix post hashing:"+str(data.X.get_shape()))
+            summary_file.write("\nSize of count matrix post hashing:"+str(data.X.shape))
             summary_file.write("\n")
 
         ###Doublet detection -- Scrublet
         print("Beginning doublet detection - scrublet")
         summary_file.write("\nDoublet detection and filtration – Scrublet:")
-        data.select_matrix('raw.X')
+        data.select_matrix('counts')
         counts_matrix = data.X
         scrub = scr.Scrublet(counts_matrix)
         doublet_scores, predicted_doublets = scrub.scrub_doublets()
@@ -247,14 +247,14 @@ if __name__=="__main__":
             data = data_subset
             data = _ensure_multimodal(data)
 
-            summary_file.write("\nSize of count matrix post doublet filtration:"+str(data.X.get_shape()))
+            summary_file.write("\nSize of count matrix post doublet filtration:"+str(data.X.shape))
             summary_file.write("\n")
 
         ###Doublet detection -- Doublet Detection
         print("Beginning doublet detection - DD")
         summary_file.write("\nDoublet detection and filtration – Doublet Detection:")
         clf = dd.BoostClassifier(n_iters=jdict["dd_bst_n_iters"], clustering_algorithm="phenograph", standard_scaling=jdict["dd_bst_std_scaling"])
-        data.select_matrix('raw.X')
+        data.select_matrix('counts')
         print(f"after select raw = {np.max(data.X.T.todense())}")
         doublets = clf.fit(data.X).predict(p_thresh=jdict["dd_pred_pthresh"], voter_thresh=jdict["dd_pred_voterthresh"])
         doublet_score = clf.doublet_score()
@@ -264,11 +264,11 @@ if __name__=="__main__":
         data_subset = data[data.obs["doublet"] == 0,:].copy()
         data = data_subset
         data = _ensure_multimodal(data)
-        data.select_matrix('X')
+        data.select_matrix('counts.log_norm')
         #data_TPM_norm = data_TPM.copy()
         #data_TPM_norm.X = (10**6)*normalize(data_TPM.X,norm='l1',axis=1)
         #print(data_TPM_norm.var['featureid'])
-        summary_file.write("\nSize of count matrix post doublet filtration:"+str(data.X.get_shape()))
+        summary_file.write("\nSize of count matrix post doublet filtration:"+str(data.X.shape))
         summary_file.write("\n")
         ###Aggregate count matrices
         dataset_anndata = f"{samplename}/{dataset[0]}.h5ad"
@@ -281,7 +281,8 @@ if __name__=="__main__":
     print("Aggregating count matrices")
     print(f"{samplename}/{batchname}_pg_aggregate.csv")
     data = pg.aggregate_matrices(f"{samplename}/{batchname}_pg_aggregate.csv")
-    summary_file.write("\nSize of aggregated count matrix (# of obs, # of genes):"+str(data.X.get_shape()))
+    print(f"Post-aggregate data modalities: {data.list_data()}")
+    summary_file.write("\nSize of aggregated count matrix (# of obs, # of genes):"+str(data.X.shape))
     summary_file.write("\n")
     print(data)
     pg.identify_robust_genes(data)
@@ -310,24 +311,11 @@ if __name__=="__main__":
     umap_fig_post.savefig(f"{samplename}/umap_fig_post.png")
     ###save UMAP coordinates
     umap_coord = data.obsm['X_umap']
-    first_coord = []
-    second_coord = []
-    count = 0
-    for i in umap_coord:
-        for j in i:
-            if count % 2 == 0:
-                first_coord.append(j)
-            count += 1
-    count_2 = 0
-    for i in umap_coord:
-        for j in i:
-            if count_2 % 2 == 1:
-                second_coord.append(j)
-            count_2 += 1
-    first_coord = pd.Series(first_coord)
-    second_coord = pd.Series(second_coord)
-    d = {'barcodekey':data.obs_names,'first_coord':first_coord, 'second_coord':second_coord}
-    umap_df = pd.DataFrame(d)
+    umap_df = pd.DataFrame({
+        'barcodekey': data.obs_names,
+        'first_coord': umap_coord[:, 0],
+        'second_coord': umap_coord[:, 1],
+    })
     umap_df.to_csv(f"{samplename}/umap_coords.csv", index=False)
     ###save summary stats on cluster sizes
     summary_file.write("\nCluster sizes:\n")
