@@ -14,8 +14,9 @@ pegasuspy==1.9.1.post1
 scrublet==0.2.3
 doubletdetection==4.2
 
-# Harmony batch correction (harmonypy API used directly in Pegasus-Pipeline.py)
-harmonypy==0.0.9
+# Harmony batch correction — pegasus imports 'harmony' (from harmony-pytorch),
+# NOT 'harmonypy'. The two are completely different packages.
+harmony-pytorch
 
 # HDF5 file I/O — used directly in Pegasus-Pipeline.py to patch NeMo h5 files
 # (feature_type/genome fields are 'NA' from STARsolo/Optimus; must be patched to

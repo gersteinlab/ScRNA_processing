@@ -21,6 +21,7 @@ import random
 import argparse
 import multiprocessing as mp
 
+
 #############################################################################################
 def patch_cellbender_h5(path):
     """Patch STARsolo/Optimus CellBender h5 files that have 'NA' in
@@ -29,29 +30,38 @@ def patch_cellbender_h5(path):
     breaks qc_metrics, log_norm, HVG, etc.  This function rewrites them
     in-place to 'Gene Expression' and 'GRCh38' so pegasusio assigns
     modality='rna' correctly."""
-    with h5py.File(path, 'r+') as f:
-        if 'matrix' not in f or 'features' not in f['matrix']:
-            print(f"patch_cellbender_h5: unexpected structure in {path}, skipping patch")
+    with h5py.File(path, "r+") as f:
+        if "matrix" not in f or "features" not in f["matrix"]:
+            print(
+                f"patch_cellbender_h5: unexpected structure in {path}, skipping patch"
+            )
             return
-        feat = f['matrix']['features']
+        feat = f["matrix"]["features"]
         # Fix feature_type: b'NA' / b'' / b'na' → b'Gene Expression'
-        if 'feature_type' in feat:
-            ft = feat['feature_type'][:]
-            if all(v in (b'NA', b'', b'na') for v in ft):
+        if "feature_type" in feat:
+            ft = feat["feature_type"][:]
+            if all(v in (b"NA", b"", b"na") for v in ft):
                 n = len(ft)
-                del feat['feature_type']
+                del feat["feature_type"]
                 dt = h5py.string_dtype()
-                feat.create_dataset('feature_type', data=[b'Gene Expression'] * n, dtype=dt)
-                print(f"patch_cellbender_h5: rewrote feature_type to 'Gene Expression' ({n} features) in {path}")
+                feat.create_dataset(
+                    "feature_type", data=[b"Gene Expression"] * n, dtype=dt
+                )
+                print(
+                    f"patch_cellbender_h5: rewrote feature_type to 'Gene Expression' ({n} features) in {path}"
+                )
         # Fix genome: b'NA' / b'' / b'na' → b'GRCh38'
-        if 'genome' in feat:
-            gn = feat['genome'][:]
-            if all(v in (b'NA', b'', b'na') for v in gn):
+        if "genome" in feat:
+            gn = feat["genome"][:]
+            if all(v in (b"NA", b"", b"na") for v in gn):
                 n = len(gn)
-                del feat['genome']
+                del feat["genome"]
                 dt = h5py.string_dtype()
-                feat.create_dataset('genome', data=[b'GRCh38'] * n, dtype=dt)
-                print(f"patch_cellbender_h5: rewrote genome to 'GRCh38' ({n} features) in {path}")
+                feat.create_dataset("genome", data=[b"GRCh38"] * n, dtype=dt)
+                print(
+                    f"patch_cellbender_h5: rewrote genome to 'GRCh38' ({n} features) in {path}"
+                )
+
 
 def _ensure_multimodal(data):
     """Wrap data in MultimodalData if it isn't one already.
@@ -62,20 +72,34 @@ def _ensure_multimodal(data):
         return data
     return MultimodalData(data)
 
+
 #############################################################################################
-if __name__=="__main__":
+if __name__ == "__main__":
     ###Setting up program parameters annd optionns available to the user
     parser = argparse.ArgumentParser()
-    parser.add_argument('-J','--jsonfile', required=True, help='')
-    parser.add_argument('-S','--samplename', required=True, help='Name of the sample to be processed (will be designated as the folder name containing all files)')
-    parser.add_argument('--ahba_markers', required=False, default=None,
-                        help='Path to AHBA_PFC_filtered.json marker file. '
-                             'Defaults to the file bundled in the Docker image at '
-                             '/opt/pipeline/AHBA_PFC_filtered.json if not provided.')
-    parser.add_argument('--hybrid_markers', required=False, default=None,
-                        help='Path to Hybrid_subclass_markers.json marker file. '
-                             'Defaults to the file bundled in the Docker image at '
-                             '/opt/pipeline/Hybrid_subclass_markers.json if not provided.')
+    parser.add_argument("-J", "--jsonfile", required=True, help="")
+    parser.add_argument(
+        "-S",
+        "--samplename",
+        required=True,
+        help="Name of the sample to be processed (will be designated as the folder name containing all files)",
+    )
+    parser.add_argument(
+        "--ahba_markers",
+        required=False,
+        default=None,
+        help="Path to AHBA_PFC_filtered.json marker file. "
+        "Defaults to the file bundled in the Docker image at "
+        "/opt/pipeline/AHBA_PFC_filtered.json if not provided.",
+    )
+    parser.add_argument(
+        "--hybrid_markers",
+        required=False,
+        default=None,
+        help="Path to Hybrid_subclass_markers.json marker file. "
+        "Defaults to the file bundled in the Docker image at "
+        "/opt/pipeline/Hybrid_subclass_markers.json if not provided.",
+    )
 
     args = parser.parse_args()
 
@@ -86,8 +110,16 @@ if __name__=="__main__":
     # Marker file paths: use CLI args if provided, otherwise fall back to
     # paths baked into the Docker image at /opt/pipeline/
     _docker_default = "/opt/pipeline"
-    ahba_markers_path   = args.ahba_markers   if args.ahba_markers   else f"{_docker_default}/AHBA_PFC_filtered.json"
-    hybrid_markers_path = args.hybrid_markers if args.hybrid_markers else f"{_docker_default}/Hybrid_subclass_markers.json"
+    ahba_markers_path = (
+        args.ahba_markers
+        if args.ahba_markers
+        else f"{_docker_default}/AHBA_PFC_filtered.json"
+    )
+    hybrid_markers_path = (
+        args.hybrid_markers
+        if args.hybrid_markers
+        else f"{_docker_default}/Hybrid_subclass_markers.json"
+    )
 
     batchname = samplename
     ###Create directory for outputs
@@ -125,24 +157,26 @@ if __name__=="__main__":
     currdir = jdict["currdir"]
 
     ###Create summary stats text file
-    summary_file = open(f"{samplename}/{batchname}_summary_stats.txt","w")
+    summary_file = open(f"{samplename}/{batchname}_summary_stats.txt", "w")
     summary_file.write("Parameters used:\n")
     summary_file.write(json.dumps(jdict))
     summary_file.write("\n")
 
     ###Write out pg.aggregate csv file
-    header = ["Sample","Location"]
+    header = ["Sample", "Location"]
     filename = f"{batchname}_pg_aggregate.csv"
-    csvfile = open(f"{samplename}/{batchname}_pg_aggregate.csv", 'w')
+    csvfile = open(f"{samplename}/{batchname}_pg_aggregate.csv", "w")
     csvwriter = csv.writer(csvfile)
     csvwriter.writerow(header)
-
 
     for dataset in jdict["matrix_directory"]:
         print("Importing count matrix")
         patch_cellbender_h5(dataset[1])
         data = pg.read_input(dataset[1])
-        summary_file.write(f"\nSize of count matrix {dataset[0]} (# of obs, # of genes):"+str(data.X.shape))
+        summary_file.write(
+            f"\nSize of count matrix {dataset[0]} (# of obs, # of genes):"
+            + str(data.X.shape)
+        )
         summary_file.write("\n")
         ###Read count matrix if only one sample
         # if len(jdict["matrix_directory"]) == 1:
@@ -154,26 +188,28 @@ if __name__=="__main__":
         ###Read count matrix if aggregate needed (more than one sample)
         # else:
 
-
-
-
         ###QC Metrics and filtration and log-normalization
         print("Beginning QC metrics")
-        pg.qc_metrics(data, min_umis=jdict["qc_min_umis"], percent_mito=jdict["qc_percent_mito"], min_genes=jdict["qc_min_genes"])
+        pg.qc_metrics(
+            data,
+            min_umis=jdict["qc_min_umis"],
+            percent_mito=jdict["qc_percent_mito"],
+            min_genes=jdict["qc_min_genes"],
+        )
         df_qc = pg.get_filter_stats(data)
         print(data)
         summary_file.write("\nQC metrics stats:\n")
-        summary_file.write(df_qc.to_string(header = True, index = True))
+        summary_file.write(df_qc.to_string(header=True, index=True))
         pg.filter_data(data)
         print(data)
 
         ###Filter out mitochondrial genes
         print("Beginning mito gene filtration")
         mito_df = pd.read_csv(jdict["mito_file"])
-        mito_df = mito_df.loc[0:1135,'HumanGeneID':'Symbol']
+        mito_df = mito_df.loc[0:1135, "HumanGeneID":"Symbol"]
         mito_list = []
         for i in range(mito_df.shape[0]):
-            mito_list.append(mito_df.loc[i,'Symbol'].upper())
+            mito_list.append(mito_df.loc[i, "Symbol"].upper())
         mito_list = set(mito_list)
         non_mito_list = []
         for i in data.var_names:
@@ -185,7 +221,9 @@ if __name__=="__main__":
         data = data_subset
         data = _ensure_multimodal(data)
         print(data)
-        summary_file.write("\nSize of count matrix post mito gene filtration:"+str(data.X.shape))
+        summary_file.write(
+            "\nSize of count matrix post mito gene filtration:" + str(data.X.shape)
+        )
         summary_file.write("\n")
 
         pg.identify_robust_genes(data)
@@ -197,7 +235,7 @@ if __name__=="__main__":
         if jdict["hashing"] == "True":
             print(f"HTO data = {jdict['hto_file']}")
 
-            features_file = jdict["hto_file"]+"/features.tsv.gz"
+            features_file = jdict["hto_file"] + "/features.tsv.gz"
             feature_metadata = pd.read_csv(features_file, sep="\t", header=None)
             print(f"Feature metadata = {feature_metadata}")
             print(f"Feature metadata shape = {feature_metadata.shape}")
@@ -214,28 +252,33 @@ if __name__=="__main__":
             # rename_call = f"mv {features_updated} {features_file}"
             # subprocess.call(rename_call,shell=True)
 
-
-            hto_data = pg.read_input(jdict["hto_file"]+"/matrix.mtx.gz", genome = 'hashing_HTO', modality="hashing")
-            features = pd.read_csv(jdict["hto_file"]+"/features.tsv.gz", header=None)
-            barcodes = pd.read_csv(jdict["hto_file"]+"/barcodes.tsv.gz", header=None)
+            hto_data = pg.read_input(
+                jdict["hto_file"] + "/matrix.mtx.gz",
+                genome="hashing_HTO",
+                modality="hashing",
+            )
+            features = pd.read_csv(jdict["hto_file"] + "/features.tsv.gz", header=None)
+            barcodes = pd.read_csv(jdict["hto_file"] + "/barcodes.tsv.gz", header=None)
             hto_data.var_names = features[0]
             hto_data.obs_names = barcodes[0]
 
             pg.estimate_background_probs(hto_data)
             print(hto_data.uns["background_probs"])
             pg.demultiplex(data, hto_data)
-            data_subset = data[data.obs["demux_type"] == "singlet",:].copy()
+            data_subset = data[data.obs["demux_type"] == "singlet", :].copy()
             data = data_subset
             data = _ensure_multimodal(data)
             print(data)
 
-            summary_file.write("\nSize of count matrix post hashing:"+str(data.X.shape))
+            summary_file.write(
+                "\nSize of count matrix post hashing:" + str(data.X.shape)
+            )
             summary_file.write("\n")
 
         ###Doublet detection -- Scrublet
         print("Beginning doublet detection - scrublet")
         summary_file.write("\nDoublet detection and filtration – Scrublet:")
-        data.select_matrix('counts')
+        data.select_matrix("counts")
         counts_matrix = data.X
         scrub = scr.Scrublet(counts_matrix)
         doublet_scores, predicted_doublets = scrub.scrub_doublets()
@@ -243,37 +286,47 @@ if __name__=="__main__":
         if doublet is not None:
             data.obs["doublet"] = doublet
             print(doublet)
-            data_subset = data[data.obs["doublet"] == False,:].copy()
+            data_subset = data[data.obs["doublet"] == False, :].copy()
             data = data_subset
             data = _ensure_multimodal(data)
 
-            summary_file.write("\nSize of count matrix post doublet filtration:"+str(data.X.shape))
+            summary_file.write(
+                "\nSize of count matrix post doublet filtration:" + str(data.X.shape)
+            )
             summary_file.write("\n")
 
         ###Doublet detection -- Doublet Detection
         print("Beginning doublet detection - DD")
         summary_file.write("\nDoublet detection and filtration – Doublet Detection:")
-        clf = dd.BoostClassifier(n_iters=jdict["dd_bst_n_iters"], clustering_algorithm="phenograph", standard_scaling=jdict["dd_bst_std_scaling"])
-        data.select_matrix('counts')
+        clf = dd.BoostClassifier(
+            n_iters=jdict["dd_bst_n_iters"],
+            clustering_algorithm="phenograph",
+            standard_scaling=jdict["dd_bst_std_scaling"],
+        )
+        data.select_matrix("counts")
         print(f"after select raw = {np.max(data.X.T.todense())}")
-        doublets = clf.fit(data.X).predict(p_thresh=jdict["dd_pred_pthresh"], voter_thresh=jdict["dd_pred_voterthresh"])
+        doublets = clf.fit(data.X).predict(
+            p_thresh=jdict["dd_pred_pthresh"], voter_thresh=jdict["dd_pred_voterthresh"]
+        )
         doublet_score = clf.doublet_score()
         data.obs["doublet"] = doublets
         data.obs["doublet_score"] = doublet_score
         print(doublets)
-        data_subset = data[data.obs["doublet"] == 0,:].copy()
+        data_subset = data[data.obs["doublet"] == 0, :].copy()
         data = data_subset
         data = _ensure_multimodal(data)
-        data.select_matrix('counts.log_norm')
-        #data_TPM_norm = data_TPM.copy()
-        #data_TPM_norm.X = (10**6)*normalize(data_TPM.X,norm='l1',axis=1)
-        #print(data_TPM_norm.var['featureid'])
-        summary_file.write("\nSize of count matrix post doublet filtration:"+str(data.X.shape))
+        data.select_matrix("counts.log_norm")
+        # data_TPM_norm = data_TPM.copy()
+        # data_TPM_norm.X = (10**6)*normalize(data_TPM.X,norm='l1',axis=1)
+        # print(data_TPM_norm.var['featureid'])
+        summary_file.write(
+            "\nSize of count matrix post doublet filtration:" + str(data.X.shape)
+        )
         summary_file.write("\n")
         ###Aggregate count matrices
         dataset_anndata = f"{samplename}/{dataset[0]}.h5ad"
-        pg.write_output(data,dataset_anndata)
-        csvwriter.writerow([dataset[0],dataset_anndata])
+        pg.write_output(data, dataset_anndata)
+        csvwriter.writerow([dataset[0], dataset_anndata])
         print(data)
 
     csvfile.close()
@@ -282,7 +335,9 @@ if __name__=="__main__":
     print(f"{samplename}/{batchname}_pg_aggregate.csv")
     data = pg.aggregate_matrices(f"{samplename}/{batchname}_pg_aggregate.csv")
     print(f"Post-aggregate data modalities: {data.list_data()}")
-    summary_file.write("\nSize of aggregated count matrix (# of obs, # of genes):"+str(data.X.shape))
+    summary_file.write(
+        "\nSize of aggregated count matrix (# of obs, # of genes):" + str(data.X.shape)
+    )
     summary_file.write("\n")
     print(data)
     pg.identify_robust_genes(data)
@@ -291,39 +346,50 @@ if __name__=="__main__":
 
     pg.highly_variable_features(data_pre, batch="Channel", n_top=jdict["hvg_n_top"])
     pg.pca(data_pre)
-    pg.neighbors(data_pre, n_jobs = jdict["n_jobs"])
+    pg.neighbors(data_pre, n_jobs=jdict["n_jobs"])
     pg.leiden(data_pre)
-    pg.umap(data_pre, n_jobs = jdict["n_jobs"])
+    pg.umap(data_pre, n_jobs=jdict["n_jobs"])
     ###save UMAP figure
-    umap_fig_pre = pg.scatter(data_pre, attrs=['leiden_labels', 'Channel'], basis='umap', return_fig=True)
+    umap_fig_pre = pg.scatter(
+        data_pre, attrs=["leiden_labels", "Channel"], basis="umap", return_fig=True
+    )
     umap_fig_pre.savefig(f"{samplename}/umap_fig_pre.png")
+    del data_pre  # free ~10 GB; no longer needed after pre-Harmony UMAP is saved
 
     ###HVG, PCA, Harmony, Neighbors, Leiden, UMAP
     pg.highly_variable_features(data, batch="Channel", n_top=jdict["hvg_n_top"])
     pg.pca(data)
-    pca_key = pg.run_harmony(data, n_jobs = jdict["n_jobs"])
-    pg.neighbors(data, rep=pca_key, n_jobs = jdict["n_jobs"])
+    pca_key = pg.run_harmony(data, n_jobs=jdict["n_jobs"])
+    pg.neighbors(data, rep=pca_key, n_jobs=jdict["n_jobs"])
     pg.leiden(data, rep=pca_key)
-    pg.umap(data, rep=pca_key, n_jobs = jdict["n_jobs"])
+    pg.umap(data, rep=pca_key, n_jobs=jdict["n_jobs"])
     print(data)
     ###save UMAP figure
-    umap_fig_post = pg.scatter(data, attrs=['leiden_labels', 'Channel'], basis='umap', return_fig=True)
+    umap_fig_post = pg.scatter(
+        data, attrs=["leiden_labels", "Channel"], basis="umap", return_fig=True
+    )
     umap_fig_post.savefig(f"{samplename}/umap_fig_post.png")
     ###save UMAP coordinates
-    umap_coord = data.obsm['X_umap']
-    umap_df = pd.DataFrame({
-        'barcodekey': data.obs_names,
-        'first_coord': umap_coord[:, 0],
-        'second_coord': umap_coord[:, 1],
-    })
+    umap_coord = data.obsm["X_umap"]
+    umap_df = pd.DataFrame(
+        {
+            "barcodekey": data.obs_names,
+            "first_coord": umap_coord[:, 0],
+            "second_coord": umap_coord[:, 1],
+        }
+    )
     umap_df.to_csv(f"{samplename}/umap_coords.csv", index=False)
     ###save summary stats on cluster sizes
     summary_file.write("\nCluster sizes:\n")
-    summary_file.write(pd.DataFrame(data.obs[['leiden_labels']].value_counts()).to_string(header = False, index = True))
+    summary_file.write(
+        pd.DataFrame(data.obs[["leiden_labels"]].value_counts()).to_string(
+            header=False, index=True
+        )
+    )
     summary_file.write("\n")
 
     ###Marker Gene Analysis
-    pg.de_analysis(data, cluster='leiden_labels', t=True)
+    pg.de_analysis(data, cluster="leiden_labels", t=True)
     print("de analysis done")
     marker_dict = pg.markers(data)
     print("marker gene analysis done")
@@ -333,14 +399,14 @@ if __name__=="__main__":
     for keys in marker_dict:
         value = marker_dict[keys]
         for j in value:
-            if j == 'up':
-                df_value = marker_dict[keys]['up']
+            if j == "up":
+                df_value = marker_dict[keys]["up"]
                 master_list_up.append(df_value.index)
     for keys in marker_dict:
         value = marker_dict[keys]
         for j in value:
-            if j == 'down':
-                df_value_d = marker_dict[keys]['down']
+            if j == "down":
+                df_value_d = marker_dict[keys]["down"]
                 master_list_down.append(df_value_d.index)
     up_marker_df = pd.DataFrame(master_list_up)
     up_marker_df = up_marker_df.transpose()
@@ -351,17 +417,27 @@ if __name__=="__main__":
 
     ###Infer Cell Types
 
-    pg.infer_cell_types(data, markers=ahba_markers_path,   output_file=f"{samplename}/infer_cell_types_AHBA_markers")
-    pg.infer_cell_types(data, markers=hybrid_markers_path, output_file=f"{samplename}/infer_cell_types_Hybrid_markers")
+    pg.infer_cell_types(
+        data,
+        markers=ahba_markers_path,
+        output_file=f"{samplename}/infer_cell_types_AHBA_markers",
+    )
+    pg.infer_cell_types(
+        data,
+        markers=hybrid_markers_path,
+        output_file=f"{samplename}/infer_cell_types_Hybrid_markers",
+    )
     print("infer cell types using the Bakken et al markers done")
 
     if jdict["hashing"] == "True":
         HTOnames = set(data.obs["assignment"].values)
         print(f"Sample names = {HTOnames}")
         for sample in HTOnames:
-            data_sample = _ensure_multimodal(data[data.obs["assignment"]==sample,:].copy())
+            data_sample = _ensure_multimodal(
+                data[data.obs["assignment"] == sample, :].copy()
+            )
             dataset_anndata = f"{samplename}/{batchname}_{sample}_Processed.h5ad"
-            pg.write_output(data_sample,dataset_anndata)
+            pg.write_output(data_sample, dataset_anndata)
     # data_TPM_norm.obs[['leiden_labels']] = data.obs[['leiden_labels']]
     # if not os.path.exists(f'{samplename}'):
     #     os.mkdir(f'{samplename}')
