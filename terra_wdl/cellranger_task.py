@@ -81,12 +81,13 @@ def run_cellranger_count(args) -> str:
     Run cellranger count and return the path to the output folder.
     """
     include_flag = f"--include-introns {args.include_introns.lower()}"
+    sample_prefix = args.fastq_sample_prefix if args.fastq_sample_prefix else args.sample_tag
 
     cmd = (
         f"cellranger count"
         f"  --id={args.sample_tag}"
         f"  --fastqs={args.local_fastq_dir}"
-        f"  --sample={args.sample_tag}"
+        f"  --sample={sample_prefix}"
         f"  --transcriptome={args.transcriptome}"
         f"  --chemistry={args.chemistry}"
         f"  --localcores={args.numproc}"
@@ -169,6 +170,11 @@ def main():
     parser.add_argument(
         "--min_umi_check", required=False, type=int, default=1000,
         help="Median UMI threshold below which sample is flagged low quality (default: 1000)."
+    )
+    parser.add_argument(
+        "--fastq_sample_prefix", required=False, default="",
+        help="FASTQ sample name prefix (the part before _S{N}_L{lane} in filenames). "
+             "If empty, falls back to --sample_tag."
     )
     parser.add_argument(
         "--billing_project", required=False, default="",

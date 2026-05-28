@@ -12,6 +12,7 @@
   ],
   "SCRNAseqPipeline.chemistry_flags": ["auto", "auto"],
   "SCRNAseqPipeline.include_introns_flags": ["true", "true"],
+  "SCRNAseqPipeline.fastq_sample_prefixes": ["HCTBA_CTR_INS1_HNT", "HCCLC_OUD_INS1_HNT"],
   "SCRNAseqPipeline.hashing_flags": [false, false],
   "SCRNAseqPipeline.hashing_fastq_r1": ["", ""],
   "SCRNAseqPipeline.hashing_fastq_r2": ["", ""],

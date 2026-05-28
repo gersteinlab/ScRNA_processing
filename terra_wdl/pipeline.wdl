@@ -60,6 +60,10 @@ workflow SCRNAseqPipeline {
     ## "true" / "false" – include intronic reads (snRNA-seq = true)
     Array[String] include_introns_flags = []
 
+    ## FASTQ sample name prefix (part before _S{N}_L{lane} in filenames).
+    ## If empty or shorter than sample_tags, falls back to sample_tags[i].
+    Array[String] fastq_sample_prefixes = []
+
     ## Hashing FASTQ R1 / R2 paths (empty string "" for non-hashed samples)
     Array[String] hashing_fastq_r1 = []
     Array[String] hashing_fastq_r2 = []
@@ -183,9 +187,10 @@ workflow SCRNAseqPipeline {
       # ---------------------------------------------------------------------
       call CellRangerCount {
         input:
-          fastq_dir       = fastq_dirs[i],
-          sample_tag      = sample_tags[i],
-          transcriptome   = transcriptome_gcs_path,
+          fastq_dir            = fastq_dirs[i],
+          sample_tag           = sample_tags[i],
+          fastq_sample_prefix  = if length(fastq_sample_prefixes) > i then fastq_sample_prefixes[i] else "",
+          transcriptome        = transcriptome_gcs_path,
           chemistry       = chemistry_flags[i],
           include_introns = include_introns_flags[i],
           numproc         = cellranger_cpu,
@@ -352,6 +357,7 @@ task CellRangerCount {
   input {
     String  fastq_dir
     String  sample_tag
+    String  fastq_sample_prefix = ""
     String  transcriptome
     String  chemistry       = "auto"
     String  include_introns = "true"
@@ -370,9 +376,10 @@ task CellRangerCount {
     set -euo pipefail
 
     python3 /opt/pipeline/cellranger_task.py \
-      --fastq_dir        "~{fastq_dir}" \
-      --sample_tag       "~{sample_tag}" \
-      --transcriptome    "~{transcriptome}" \
+      --fastq_dir            "~{fastq_dir}" \
+      --sample_tag           "~{sample_tag}" \
+      --fastq_sample_prefix  "~{fastq_sample_prefix}" \
+      --transcriptome        "~{transcriptome}" \
       --chemistry        "~{chemistry}" \
       --include_introns  "~{include_introns}" \
       --numproc          ~{numproc} \
