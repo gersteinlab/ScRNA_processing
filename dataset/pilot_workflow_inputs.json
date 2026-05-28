@@ -39,7 +39,7 @@
   "SCRNAseqPipeline.dd_pred_pthresh": 0.0000000000000001,
   "SCRNAseqPipeline.dd_pred_voterthresh": 0.3,
 
-  "SCRNAseqPipeline.cellranger_docker": "majidfarhadloo/scrna_processing_cellranger:sha-3a85aac",
+  "SCRNAseqPipeline.cellranger_docker": "majidfarhadloo/scrna_processing_cellranger:sha-94a4df4",
   "SCRNAseqPipeline.cellbender_docker": "us.gcr.io/broad-dsde-methods/cellbender:0.3.0",
   "SCRNAseqPipeline.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:sha-709e6c9"
 }
