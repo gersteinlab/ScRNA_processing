@@ -23,7 +23,20 @@
   "SCRNAseqPipeline.run_cellbender": true,
   "SCRNAseqPipeline.billing_project": "",
 
+  "SCRNAseqPipeline.pegasus_cpu": 16,
+  "SCRNAseqPipeline.pegasus_mem_gb": 128,
+  "SCRNAseqPipeline.pegasus_disk_gb": 200,
+
+  "SCRNAseqPipeline.qc_min_umis": 500,
+  "SCRNAseqPipeline.qc_percent_mito": 10,
+  "SCRNAseqPipeline.qc_min_genes": 200,
+  "SCRNAseqPipeline.n_jobs_pg": 10,
+  "SCRNAseqPipeline.hvg_n_top": 5000,
+  "SCRNAseqPipeline.dd_bst_n_iters": 25,
+  "SCRNAseqPipeline.dd_pred_pthresh": 0.0000000000000001,
+  "SCRNAseqPipeline.dd_pred_voterthresh": 0.3,
+
   "SCRNAseqPipeline.cellranger_docker": "majidfarhadloo/scrna_processing_cellranger:latest",
   "SCRNAseqPipeline.cellbender_docker": "us.gcr.io/broad-dsde-methods/cellbender:0.3.0",
-  "SCRNAseqPipeline.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:latest"
+  "SCRNAseqPipeline.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:sha-709e6c9"
 }
