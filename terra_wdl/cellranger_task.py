@@ -80,7 +80,7 @@ def run_cellranger_count(args) -> str:
     """
     Run cellranger count and return the path to the output folder.
     """
-    include_flag = "--include-introns" if args.include_introns.lower() == "true" else ""
+    include_flag = f"--include-introns {args.include_introns.lower()}"
 
     cmd = (
         f"cellranger count"

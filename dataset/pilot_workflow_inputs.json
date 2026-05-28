@@ -1,4 +1,7 @@
 {
+  "SCRNAseqPipeline.skip_cellranger": false,
+  "SCRNAseqPipeline.precomputed_h5_urls": [],
+
   "SCRNAseqPipeline.fastq_dirs": [
     "gs://scorch-tmp-jwbzm77-nsu/scorch/grant/um1da051410_spudich/spudich/transcriptome/nuclei/10x_v3.1/NCBI_txid9606/demultiplexed_fastq/HCTBA_CTR_INS1_HNT_S2_L003/",
     "gs://scorch-tmp-jwbzm77-nsu/scorch/grant/um1da051410_spudich/spudich/transcriptome/nuclei/10x_v3.1/NCBI_txid9606/demultiplexed_fastq/HCCLC_OUD_INS1_HNT_S11_L002/"
@@ -21,7 +24,7 @@
   "SCRNAseqPipeline.run_prefix": "INS_pilot",
 
   "SCRNAseqPipeline.run_cellbender": true,
-  "SCRNAseqPipeline.billing_project": "",
+  "SCRNAseqPipeline.billing_project": "terra-4ea165c8",
 
   "SCRNAseqPipeline.pegasus_cpu": 16,
   "SCRNAseqPipeline.pegasus_mem_gb": 128,
