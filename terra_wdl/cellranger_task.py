@@ -92,6 +92,7 @@ def run_cellranger_count(args) -> str:
         f"  --localcores={args.numproc}"
         f"  --localmem={args.localmem}"
         f"  --jobmode=local"
+        f"  --create-bam false"
         f"  {include_flag}"
     )
     print(f"[cellranger_task] Running: {cmd}")
