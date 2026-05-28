@@ -76,12 +76,35 @@ def localize_reference(gcs_path: str, local_dir: str = "./reference") -> str:
     return local_ref_path
 
 
+def detect_fastq_sample_prefix(fastq_dir: str) -> str:
+    """
+    Auto-detect the sample prefix from FASTQ filenames in the directory.
+    CellRanger expects filenames like {SampleName}_S{N}_L{lane}_R{read}_001.fastq.gz.
+    Returns the {SampleName} portion from the first matching file.
+    """
+    import re
+    pattern = re.compile(r'^(.+?)_S\d+_L\d+_R[12I]\d*_001\.fastq\.gz$')
+    for fname in sorted(os.listdir(fastq_dir)):
+        m = pattern.match(fname)
+        if m:
+            prefix = m.group(1)
+            print(f"[cellranger_task] Auto-detected FASTQ sample prefix: {prefix}")
+            return prefix
+    return ""
+
+
 def run_cellranger_count(args) -> str:
     """
     Run cellranger count and return the path to the output folder.
     """
     include_flag = f"--include-introns {args.include_introns.lower()}"
-    sample_prefix = args.fastq_sample_prefix if args.fastq_sample_prefix else args.sample_tag
+
+    # Determine sample prefix: explicit arg > auto-detect > fallback to sample_tag
+    sample_prefix = args.fastq_sample_prefix if args.fastq_sample_prefix else ""
+    if not sample_prefix:
+        sample_prefix = detect_fastq_sample_prefix(args.local_fastq_dir)
+    if not sample_prefix:
+        sample_prefix = args.sample_tag
 
     cmd = (
         f"cellranger count"
