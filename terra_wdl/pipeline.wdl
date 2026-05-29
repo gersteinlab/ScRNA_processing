@@ -515,7 +515,6 @@ task CellBender {
     disks:       "local-disk ~{disk_gb} HDD"
     gpuType:     "nvidia-tesla-t4"
     gpuCount:    gpu
-    nvidiaDriverVersion: "535.104.05"
     preemptible: 0   # GPU tasks are not preemptible by default
   }
 }
