@@ -496,12 +496,34 @@ task CellBender {
   command <<<
     set -euo pipefail
 
-    python /opt/pipeline/cellbender_task.py \
-      --input_h5        "~{input_h5}" \
-      --output_dir      "./~{sample_tag}_cb_outputs" \
-      --expected_cells  ~{expected_cells} \
-      --epochs          ~{epochs} \
-      --fpr             ~{fpr}
+    # CellBender remove-background — run inline so we can use the public
+    # Broad CellBender image (us.gcr.io/broad-dsde-methods/cellbender:0.3.0)
+    # without baking in our own wrapper script.
+    #
+    # total_droplets_included = expected_cells + 20000 (matches original pipeline convention)
+    # MKL_THREADING_LAYER=GNU required by CellBender on GPU.
+
+    OUTPUT_DIR="./~{sample_tag}_cb_outputs"
+    mkdir -p "$OUTPUT_DIR"
+
+    TOTAL_DROPLETS=$(( ~{expected_cells} + 20000 ))
+
+    export MKL_THREADING_LAYER=GNU
+
+    cellbender remove-background \
+      --input="~{input_h5}" \
+      --output="$OUTPUT_DIR/cellbender-output.h5" \
+      --expected-cells=~{expected_cells} \
+      --total-droplets-included=$TOTAL_DROPLETS \
+      --fpr=~{fpr} \
+      --epochs=~{epochs} \
+      --cuda
+
+    # Verify the expected filtered output was produced
+    if [ ! -f "$OUTPUT_DIR/cellbender-output_filtered.h5" ]; then
+      echo "ERROR: CellBender did not produce expected filtered output: $OUTPUT_DIR/cellbender-output_filtered.h5" >&2
+      exit 1
+    fi
   >>>
 
   output {
