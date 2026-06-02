@@ -48,7 +48,6 @@ RUN mkdir -p /opt/pipeline
 
 COPY Pegasus-Pipeline.py            /opt/pipeline/Pegasus-Pipeline.py
 COPY terra_wdl/cellranger_task.py  /opt/pipeline/cellranger_task.py
-COPY terra_wdl/cellbender_task.py  /opt/pipeline/cellbender_task.py
 COPY AHBA_PFC_filtered.json         /opt/pipeline/AHBA_PFC_filtered.json
 COPY Hybrid_subclass_markers.json   /opt/pipeline/Hybrid_subclass_markers.json
 
