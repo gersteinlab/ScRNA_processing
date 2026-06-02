@@ -389,10 +389,10 @@ task CellRangerCount {
   >>>
 
   output {
-    File    raw_h5          = read_string("raw_h5_path.txt")
-    File    filtered_h5     = read_string("filtered_h5_path.txt")
-    File    molecule_info   = read_string("molecule_info_path.txt")
-    File    metrics_csv     = read_string("metrics_csv_path.txt")
+    File    raw_h5          = glob("*/outs/raw_feature_bc_matrix.h5")[0]
+    File    filtered_h5     = glob("*/outs/filtered_feature_bc_matrix.h5")[0]
+    File    molecule_info   = glob("*/outs/molecule_info.h5")[0]
+    File    metrics_csv     = glob("*/outs/metrics_summary.csv")[0]
     Int     estimated_cells = read_int("estimated_cells.txt")
     Boolean is_low_quality  = read_boolean("is_low_quality.txt")
     File    metrics_json    = "cellranger_metrics.json"
@@ -505,7 +505,7 @@ task CellBender {
   >>>
 
   output {
-    File cb_filtered_h5 = read_string("cb_filtered_h5_path.txt")
+    File cb_filtered_h5 = glob("*_cb_outputs/cellbender-output_filtered.h5")[0]
   }
 
   runtime {

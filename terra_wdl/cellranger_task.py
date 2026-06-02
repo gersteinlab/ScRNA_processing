@@ -258,19 +258,10 @@ def main():
         )
 
     # ------------------------------------------------------------------
-    # 5. Write output files consumed by WDL read_* functions
-    #    WDL captures these via output { } declarations.
+    # 5. Write small output files consumed by WDL read_int/read_boolean.
+    #    File outputs (h5, csv) are captured by WDL via glob() patterns
+    #    in the output { } block; no path-marker files needed.
     # ------------------------------------------------------------------
-    # Absolute paths written to text files for WDL read_string()
-    with open("raw_h5_path.txt", "w") as f:
-        f.write(raw_h5)
-    with open("filtered_h5_path.txt", "w") as f:
-        f.write(filtered_h5)
-    with open("molecule_info_path.txt", "w") as f:
-        f.write(molecule_info_h5)
-    with open("metrics_csv_path.txt", "w") as f:
-        f.write(metrics_csv)
-
     # Integer outputs for WDL read_int()
     with open("estimated_cells.txt", "w") as f:
         f.write(str(estimated_cells))
