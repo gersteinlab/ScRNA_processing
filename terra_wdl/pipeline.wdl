@@ -303,8 +303,11 @@ workflow SCRNAseqPipeline {
     Array[File?]    cb_filtered_h5_list  = CellBender.cb_filtered_h5
 
     # Pegasus batch outputs
-    File            pegasus_output_tar   = PegasusPipeline.output_tar
-    File            pegasus_summary      = PegasusPipeline.summary_stats
+    File            pegasus_output_tar       = PegasusPipeline.output_tar
+    File            pegasus_summary          = PegasusPipeline.summary_stats
+    # Per-batch h5ad consumed by the downstream Azimuth workflow
+    # (terra_wdl/downstream.wdl). See PIPELINE_RUN_SUMMARY.md section 8.
+    File            pegasus_hybrid_filtered_h5ad = PegasusPipeline.hybrid_filtered_h5ad
   }
 }
 
@@ -651,6 +654,9 @@ PYEOF
   output {
     File output_tar    = "~{batch_name}_pegasus_outputs.tar.gz"
     File summary_stats = read_string("summary_path.txt")
+    # Explicit handoff for the downstream Azimuth workflow (downstream.wdl).
+    # See PIPELINE_RUN_SUMMARY.md section 8.2 decision 0.5.
+    File hybrid_filtered_h5ad = glob("~{batch_name}/*_Hybrid_filtered.h5ad")[0]
   }
 
   runtime {

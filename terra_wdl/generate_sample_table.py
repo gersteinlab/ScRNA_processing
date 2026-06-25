@@ -330,6 +330,15 @@ def main():
             "'expected_low_quality' column to the sample table for review."
         )
     )
+    parser.add_argument(
+        "--write_individual_map", action="store_true",
+        help=(
+            "Also emit a 2-column TSV mapping each sample_tag to its "
+            "individualID (subject_id). Required input for the downstream "
+            "Azimuth workflow (terra_wdl/downstream.wdl). "
+            "Output file: {output_dir}/{output_prefix}_sample_to_individual.tsv"
+        )
+    )
     args = parser.parse_args()
 
     hashing_keywords = [k.strip() for k in args.hashing_keywords.split(",")]
@@ -499,6 +508,23 @@ def main():
     set_path = os.path.join(args.output_dir, f"{args.output_prefix}_sample_set_table.tsv")
     set_df.to_csv(set_path, sep="\t", index=False)
     print(f"      Wrote sample_set table ({len(set_df)} batch(es)): {set_path}")
+
+    # ------------------------------------------------------------------
+    # 7b. Optional: sample_to_individual map (for downstream Azimuth WDL)
+    # ------------------------------------------------------------------
+    if args.write_individual_map:
+        ind_map_path = os.path.join(
+            args.output_dir, f"{args.output_prefix}_sample_to_individual.tsv"
+        )
+        ind_df = sample_out[["sample_tag", "subject_id"]].copy()
+        ind_df = ind_df.rename(columns={"subject_id": "individualID"})
+        # Deduplicate (sample_tag should already be unique, but be defensive)
+        ind_df = ind_df.drop_duplicates(subset="sample_tag", keep="first")
+        ind_df.to_csv(ind_map_path, sep="\t", index=False)
+        print(
+            f"      Wrote sample_to_individual map "
+            f"({len(ind_df)} rows): {ind_map_path}"
+        )
 
     # ------------------------------------------------------------------
     # Summary

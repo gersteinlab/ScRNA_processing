@@ -27,6 +27,8 @@ on:
       - "Pegasus-Pipeline.py"
       - "terra_wdl/cellranger_task.py"
       - "terra_wdl/cellbender_task.py"
+      - "terra_wdl/reconcile_labels.py"
+      - "terra_wdl/finalize_h5ad_task.py"
       - "AHBA_PFC_filtered.json"
       - "Hybrid_subclass_markers.json"
 

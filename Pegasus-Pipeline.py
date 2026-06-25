@@ -422,12 +422,37 @@ if __name__ == "__main__":
         markers=ahba_markers_path,
         output_file=f"{samplename}/infer_cell_types_AHBA_markers",
     )
-    pg.infer_cell_types(
+    hybrid_cell_type_dict = pg.infer_cell_types(
         data,
         markers=hybrid_markers_path,
         output_file=f"{samplename}/infer_cell_types_Hybrid_markers",
     )
     print("infer cell types using the Bakken et al markers done")
+
+    ###Annotate clusters with Hybrid labels and emit filtered h5ad for downstream
+    ###Azimuth workflow (see PIPELINE_RUN_SUMMARY.md section 8.2 decision 0.3).
+    ###Filter drops clusters labeled only as the broad neuron class
+    ###("Excitatory neuron", "Inhibitory neuron") or bare integer Leiden labels
+    ###- these cannot be assigned a subclass and should not be carried into
+    ###reference-mapping (Azimuth).
+    try:
+        hybrid_cluster_names = pg.infer_cluster_names(hybrid_cell_type_dict)
+        pg.annotate(data, "anno", "leiden_labels", hybrid_cluster_names)
+        data.obs["subclass"] = data.obs["anno"].astype(str).str.split("-").str[0]
+        filternames = ["Inhibitory neuron", "Excitatory neuron"]
+        filternames.extend([str(i) for i in range(200)])
+        filtered_data = _ensure_multimodal(
+            data[~data.obs["subclass"].isin(filternames)].copy()
+        )
+        hybrid_filtered_path = f"{samplename}/{batchname}_Hybrid_filtered.h5ad"
+        pg.write_output(filtered_data, hybrid_filtered_path)
+        print(f"Wrote Hybrid-filtered h5ad for downstream Azimuth: {hybrid_filtered_path}")
+    except Exception as exc:
+        # Filtering is best-effort: if Hybrid markers fail to produce
+        # cluster names (e.g., extremely small pilot data), do not block
+        # the rest of the Pegasus stage. The downstream Azimuth workflow
+        # can still be run manually on the unfiltered h5ad if needed.
+        print(f"WARNING: failed to emit Hybrid_filtered.h5ad: {exc}")
 
     if jdict["hashing"] == "True":
         HTOnames = set(data.obs["assignment"].values)
