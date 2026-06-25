@@ -1,0 +1,28 @@
+{
+  "ScrnaDownstream.pegasus_h5ad": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/submissions/<SUBMISSION_ID>/SCRNAseqPipeline/<WORKFLOW_ID>/call-PegasusPipeline/insular_cortex_pilot/insular_cortex_pilot_Hybrid_filtered.h5ad",
+  "ScrnaDownstream.batch_name": "insular_cortex_pilot",
+
+  "ScrnaDownstream.ahba_mat_rds": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/references/azimuth/AHBA_mat.RDS",
+  "ScrnaDownstream.ahba_meta_rds": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/references/azimuth/AHBA_meta_share.RDS",
+  "ScrnaDownstream.ma_sestan_mat_rds": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/references/azimuth/Ma_Sestan_mat.rds",
+
+  "ScrnaDownstream.sample_to_individual_tsv": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/references/sample_to_individual_pilot.tsv",
+
+  "ScrnaDownstream.leiden_resolution": 4.5,
+  "ScrnaDownstream.azimuth_dims": 30,
+
+  "ScrnaDownstream.azimuth_docker": "majidfarhadloo/scrna_processing_azimuth:latest",
+  "ScrnaDownstream.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:latest",
+
+  "ScrnaDownstream.azimuth_cpu": 64,
+  "ScrnaDownstream.azimuth_mem_gb": 416,
+  "ScrnaDownstream.azimuth_disk_gb": 500,
+
+  "ScrnaDownstream.reconcile_cpu": 2,
+  "ScrnaDownstream.reconcile_mem_gb": 8,
+  "ScrnaDownstream.reconcile_disk_gb": 50,
+
+  "ScrnaDownstream.finalize_cpu": 16,
+  "ScrnaDownstream.finalize_mem_gb": 104,
+  "ScrnaDownstream.finalize_disk_gb": 200
+}
