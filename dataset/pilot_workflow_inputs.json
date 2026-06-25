@@ -42,5 +42,5 @@
 
   "SCRNAseqPipeline.cellranger_docker": "majidfarhadloo/scrna_processing_cellranger:sha-d47ded4",
   "SCRNAseqPipeline.cellbender_docker": "us.gcr.io/broad-dsde-methods/cellbender:0.3.0",
-  "SCRNAseqPipeline.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:sha-c5d5dbb"
+  "SCRNAseqPipeline.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:sha-4617b9a"
 }

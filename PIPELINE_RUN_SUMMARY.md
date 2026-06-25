@@ -262,17 +262,12 @@ for the `--batch_key` strategy options.
 |---|---|---|
 | CellRanger | `majidfarhadloo/scrna_processing_cellranger` | `sha-d47ded4` |
 | CellBender | `us.gcr.io/broad-dsde-methods/cellbender` | `0.3.0` |
-| Pegasus (full pilot) | `majidfarhadloo/scrna_processing_pegasus` | `sha-c5d5dbb` |
-| Pegasus (NeMo pilot) | `majidfarhadloo/scrna_processing_pegasus` | `sha-709e6c9` |
-| Azimuth (downstream) | `majidfarhadloo/scrna_processing_azimuth` | *pending first build* |
+| Pegasus (full pilot + NeMo pilot + downstream) | `majidfarhadloo/scrna_processing_pegasus` | `sha-4617b9a` |
+| Azimuth (downstream) | `majidfarhadloo/scrna_processing_azimuth` | *first build in progress* |
 
-> The two Pegasus pilots use different SHAs because the NeMo run was
-> validated on `sha-709e6c9` before the Dockerfile fix in `sha-c5d5dbb`.
-> Unify to `sha-c5d5dbb` once the new build is validated end-to-end.
->
-> **Pegasus image will be rebuilt** after the filter-step addition to
-> `Pegasus-Pipeline.py` (see §8.2 decision 0.3) — current `sha-c5d5dbb`
-> will be superseded; pilot JSONs must be re-pinned to the new SHA.
+> Pegasus pins unified to `sha-4617b9a` (post filter-step rebuild). Both
+> the full-pipeline (`pilot_workflow_inputs.json`) and NeMo-only pilot
+> (`nemo_public_pilot_workflow_inputs.json`) now use this tag.
 
 ---
 

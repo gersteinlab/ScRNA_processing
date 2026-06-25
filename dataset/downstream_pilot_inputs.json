@@ -12,7 +12,7 @@
   "ScrnaDownstream.azimuth_dims": 30,
 
   "ScrnaDownstream.azimuth_docker": "majidfarhadloo/scrna_processing_azimuth:latest",
-  "ScrnaDownstream.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:latest",
+  "ScrnaDownstream.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:sha-4617b9a",
 
   "ScrnaDownstream.azimuth_cpu": 64,
   "ScrnaDownstream.azimuth_mem_gb": 416,
