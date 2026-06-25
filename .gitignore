@@ -1,0 +1,14 @@
+# Claude Code local files (not part of the shared repo)
+/CLAUDE*
+/claude*
+/.claude/
+
+# Local-only working docs (not shared in repo)
+PIPELINE_RUN_SUMMARY.md
+
+# Stray/local files
+nul
+
+# Large reference data (staged in GCS, not git)
+refdata-gex-GRCh38-2024-A.tar.gz
+refdata-gex-GRCh38-2024-A/
