@@ -77,11 +77,18 @@ RUN R -e "install.packages('anndata', repos='https://cloud.r-project.org')"
 # (BSgenome.Hsapiens.UCSC.hg38, EnsDb.Hsapiens.v86, glmGamPoi, Signac, TFBSTools).
 # Without these the satijalab/azimuth install_github silently fails to install
 # the Azimuth package itself ("dependencies ... are not available for package
-# 'Azimuth'"). Install via BiocManager before the GitHub install below.
-RUN R -e "BiocManager::install(c('BSgenome.Hsapiens.UCSC.hg38','EnsDb.Hsapiens.v86','glmGamPoi','Signac','TFBSTools'), update=FALSE, ask=FALSE)"
+# 'Azimuth'"). Pin Bioc release matching R 4.3, then install base Bioc deps
+# explicitly (BSgenome/CNEr/rtracklayer/ensembldb did not get pulled
+# transitively in a previous build, breaking TFBSTools / BSgenome.Hsapiens
+# / EnsDb.Hsapiens), then the higher-level packages.
+RUN R -e "BiocManager::install(version='3.18', update=FALSE, ask=FALSE)"
+RUN R -e "BiocManager::install(c('Biostrings','GenomicRanges','GenomicFeatures','S4Vectors','IRanges','Rsamtools','rtracklayer','BSgenome','ensembldb','AnnotationFilter','AnnotationDbi','CNEr','TFBSTools','JASPAR2020','motifmatchr'), update=FALSE, ask=FALSE, dependencies=TRUE)"
+RUN R -e "BiocManager::install(c('BSgenome.Hsapiens.UCSC.hg38','EnsDb.Hsapiens.v86','glmGamPoi','Signac'), update=FALSE, ask=FALSE, dependencies=TRUE)"
+RUN R -e "stopifnot(all(c('BSgenome.Hsapiens.UCSC.hg38','EnsDb.Hsapiens.v86','glmGamPoi','Signac','TFBSTools') %in% rownames(installed.packages())))"
 
-# Azimuth (GitHub release)
-RUN R -e "remotes::install_github('satijalab/azimuth', upgrade='never')"
+# Azimuth (GitHub release). Fail fast if install_github skipped Azimuth
+# silently (it returns success even when deps are missing).
+RUN R -e "remotes::install_github('satijalab/azimuth', upgrade='never'); stopifnot('Azimuth' %in% rownames(installed.packages()))"
 
 # Verify imports
 RUN R -e "library(Seurat); library(SeuratObject); library(SeuratDisk); library(Azimuth); library(anndata); library(optparse); cat('R import smoke test passed\n')"
