@@ -40,6 +40,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpng-dev \
     libssl-dev \
     libtiff5-dev \
+    libuv1-dev \
     libxml2-dev \
     pandoc \
     python3 \
@@ -71,6 +72,13 @@ RUN R -e "remotes::install_github('mojaveazure/seurat-disk', upgrade='never')"
 
 # anndata for R
 RUN R -e "install.packages('anndata', repos='https://cloud.r-project.org')"
+
+# Bioconductor dependencies required by Azimuth
+# (BSgenome.Hsapiens.UCSC.hg38, EnsDb.Hsapiens.v86, glmGamPoi, Signac, TFBSTools).
+# Without these the satijalab/azimuth install_github silently fails to install
+# the Azimuth package itself ("dependencies ... are not available for package
+# 'Azimuth'"). Install via BiocManager before the GitHub install below.
+RUN R -e "BiocManager::install(c('BSgenome.Hsapiens.UCSC.hg38','EnsDb.Hsapiens.v86','glmGamPoi','Signac','TFBSTools'), update=FALSE, ask=FALSE)"
 
 # Azimuth (GitHub release)
 RUN R -e "remotes::install_github('satijalab/azimuth', upgrade='never')"
