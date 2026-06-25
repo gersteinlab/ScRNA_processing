@@ -25,6 +25,7 @@ on:
   push:
     branches:
       - main
+      - dev
     # Only trigger when files that affect the image actually change
     paths:
       - "terra_wdl/Dockerfile.cellranger"
