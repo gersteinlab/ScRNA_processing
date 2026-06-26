@@ -6,6 +6,9 @@
 # Local-only working docs (not shared in repo)
 PIPELINE_RUN_SUMMARY.md
 
+# Local-only summary stats (input data + generated plots)
+/summary_stat/
+
 # Stray/local files
 nul
 
