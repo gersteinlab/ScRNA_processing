@@ -4,7 +4,13 @@
 # (terra_wdl/hybrid_azimuth_task.R). Built into:
 #   majidfarhadloo/scrna_processing_azimuth
 #
-# Layered on top of rocker/r-ver (R 4.3.2) with:
+# Base: bioconductor/bioconductor_docker:RELEASE_3_18
+#   - R 4.3.x with Bioconductor 3.18 preconfigured
+#   - All Bioc system deps preinstalled (libbz2, liblzma, zlib, libdeflate,
+#     libncurses, libhts, etc.), Makevars set up for C++14/17
+#   - Eliminates Rhtslib/Rsamtools/rtracklayer/glmGamPoi build cascade
+#     failures we hit on rocker/r-ver:4.3.2
+# Layered with:
 #   - Seurat 5 + SeuratObject
 #   - Azimuth + SeuratDisk
 #   - anndata (R) for direct h5ad reads
@@ -16,43 +22,29 @@
 #
 # GitHub Actions: see .github/workflows/build-azimuth-image.yml.
 
-FROM rocker/r-ver:4.3.2
+FROM bioconductor/bioconductor_docker:RELEASE_3_18
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 # ---------------------------------------------------------------------------
-# System dependencies
+# Additional system deps not already in the Bioc base
 # ---------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    git \
-    libcurl4-openssl-dev \
-    libfontconfig1-dev \
-    libfreetype6-dev \
-    libfribidi-dev \
-    libgit2-dev \
-    libgsl-dev \
-    libharfbuzz-dev \
-    libhdf5-dev \
-    libicu-dev \
-    libjpeg-dev \
-    libpng-dev \
-    libssl-dev \
-    libtiff5-dev \
-    libuv1-dev \
-    libxml2-dev \
-    pandoc \
     python3 \
     python3-dev \
     python3-pip \
-    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
 # Python helpers used by R::reticulate to read h5ad files
 # ---------------------------------------------------------------------------
-RUN pip3 install --no-cache-dir \
+RUN pip3 install --no-cache-dir --break-system-packages \
+    anndata==0.10.7 \
+    h5py==3.11.0 \
+    numpy==1.26.4 \
+    pandas==2.2.2 \
+    scipy==1.13.0 \
+  || pip3 install --no-cache-dir \
     anndata==0.10.7 \
     h5py==3.11.0 \
     numpy==1.26.4 \
@@ -62,7 +54,7 @@ RUN pip3 install --no-cache-dir \
 # ---------------------------------------------------------------------------
 # Core R packages (CRAN)
 # ---------------------------------------------------------------------------
-RUN R -e "install.packages(c('optparse','tidyverse','SparseM','Matrix','remotes','BiocManager'), repos='https://cloud.r-project.org')"
+RUN R -e "install.packages(c('optparse','tidyverse','SparseM','Matrix','remotes'), repos='https://cloud.r-project.org')"
 
 # Seurat ecosystem
 RUN R -e "install.packages(c('Seurat','SeuratObject'), repos='https://cloud.r-project.org')"
@@ -73,16 +65,11 @@ RUN R -e "remotes::install_github('mojaveazure/seurat-disk', upgrade='never')"
 # anndata for R
 RUN R -e "install.packages('anndata', repos='https://cloud.r-project.org')"
 
-# Bioconductor dependencies required by Azimuth
-# (BSgenome.Hsapiens.UCSC.hg38, EnsDb.Hsapiens.v86, glmGamPoi, Signac, TFBSTools).
-# Without these the satijalab/azimuth install_github silently fails to install
-# the Azimuth package itself ("dependencies ... are not available for package
-# 'Azimuth'"). Pin Bioc release matching R 4.3, then install base Bioc deps
-# explicitly (BSgenome/CNEr/rtracklayer/ensembldb did not get pulled
-# transitively in a previous build, breaking TFBSTools / BSgenome.Hsapiens
-# / EnsDb.Hsapiens), then the higher-level packages.
-RUN R -e "BiocManager::install(version='3.18', update=FALSE, ask=FALSE)"
+# Bioconductor dependencies required by Azimuth.
+# Base image already provides BiocManager wired to Bioc 3.18 and all required
+# system libs. We install in two waves and assert success between them.
 RUN R -e "BiocManager::install(c('Biostrings','GenomicRanges','GenomicFeatures','S4Vectors','IRanges','Rsamtools','rtracklayer','BSgenome','ensembldb','AnnotationFilter','AnnotationDbi','CNEr','TFBSTools','JASPAR2020','motifmatchr'), update=FALSE, ask=FALSE, dependencies=TRUE)"
+RUN R -e "stopifnot(all(c('Rsamtools','rtracklayer','BSgenome','ensembldb','TFBSTools') %in% rownames(installed.packages())))"
 RUN R -e "BiocManager::install(c('BSgenome.Hsapiens.UCSC.hg38','EnsDb.Hsapiens.v86','glmGamPoi','Signac'), update=FALSE, ask=FALSE, dependencies=TRUE)"
 RUN R -e "stopifnot(all(c('BSgenome.Hsapiens.UCSC.hg38','EnsDb.Hsapiens.v86','glmGamPoi','Signac','TFBSTools') %in% rownames(installed.packages())))"
 
