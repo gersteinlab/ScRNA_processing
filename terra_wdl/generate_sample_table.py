@@ -1,26 +1,39 @@
 """
 generate_sample_table.py
 
-Transforms an exported Terra Prelim_Data TSV and a NeMo metadata TSV
-into two TSV files ready for direct import into Terra:
+Transforms the SCORCH deduped file/subject metadata manifest (or any
+cohort subset of it) into two TSV files ready for direct import into Terra:
   - {output_prefix}_sample_table.tsv     → import as "sample" entity
   - {output_prefix}_sample_set_table.tsv → import as "sample_set" entity
 
-All fields are derived automatically from the two input files.
-No manual editing of the output TSVs is required.
+This generator is **manifest-driven**. It reads the tab-separated manifest
+whose library-type column is `technique` (e.g. "10xMultiome_RNAseq"), groups
+the per-lane library records into CellRanger samples, and emits one sample
+row per CellRanger run.
 
-Usage:
+Key behaviours
+--------------
+* Chemistry is derived from `technique` via TECHNIQUE_CHEMISTRY. Multiome RNA
+  (`10xMultiome_RNAseq`) is mapped to CellRanger chemistry `ARC-v1` so it can
+  be processed by the standard `cellranger count` tool (Option A). Techniques
+  not in the map (cell-hashing, ATAC, Flex, VDJ, nanopore, pacbio, ...) are
+  excluded from the run with a per-technique summary.
+* The manifest `library_id` is a per-*lane* record. Multiple lanes of the same
+  10x sample share a FASTQ sample prefix (the token before `_S{N}`) but live in
+  separate GCS directories. Rows are grouped by (subject_id, sample_prefix) into
+  one CellRanger sample, and *all* lane directories are collected into a
+  comma-separated `fastq_dirs` field (CellRanger `--fastqs` accepts a list).
+* FASTQ filenames use different conventions across labs. Each sample is tagged
+  with a `fastq_convention` (standard | dotlane | r3) that the CellRanger task
+  uses to normalise filenames / read roles before running.
+
+Usage
+-----
     python generate_sample_table.py \
-        --prelim_data   Prelim_Data.tsv \
-        --nemo_metadata nemo_metadata.tsv \
-        --batch_key     donor_region \
-        --output_dir    ./output/ \
-        --output_prefix my_study
-
-Batch key options:
-    donor_region  Group by subject_id + sample_anatomical_region (default)
-    donor         Group by subject_id only
-    project       Group by project_id only
+        --manifest    Data/scorch_pfc_cohort_subset_2026-08-26.tsv \
+        --batch_key   donor \
+        --output_dir  ./terra_tables \
+        --output_prefix scorch_pfc
 """
 
 import argparse
@@ -29,242 +42,377 @@ import re
 import sys
 import warnings
 
-import numpy as np
 import pandas as pd
 
 
 # ---------------------------------------------------------------------------
-# Parsing helpers
+# Technique → CellRanger chemistry map. Keys double as the include allow-list;
+# any technique not present here is excluded from the run.
 # ---------------------------------------------------------------------------
+TECHNIQUE_CHEMISTRY = {
+    "10xMultiome_RNAseq": "ARC-v1",   # Option A: standard CellRanger, Multiome chemistry
+    "10x_v2":   "v2",
+    "10x_v3":   "v3",
+    "10x_v3.1": "v3",
+    "10x_v4":   "auto",               # GEM-X; let CellRanger 8+ auto-detect
+}
+
+DEFAULT_ANATOMICAL_SITES = [
+    "Brodmann (1909) area 9",
+    "Brodmann (1909) area 10",
+    "prefrontal cortex",
+]
+
+# Manifest columns the generator relies on.
+REQUIRED_MANIFEST_COLS = {
+    "library_id", "subject_id", "subject_name", "project_short_name",
+    "anatomical_site", "species", "technique", "specimen_type",
+    "data_type", "format", "url", "file_name",
+}
+
+
+# ---------------------------------------------------------------------------
+# FASTQ filename parsing
+# ---------------------------------------------------------------------------
+#   standard : {prefix}_S{n}_L{lane}_R1_001.fastq.gz      (underscore before read)
+#   dotlane  : {prefix}_S{n}_L{lane}.R1_001.fastq.gz      (dot before read)
+#   nolane   : {prefix}_S{n}_R1_001.fastq.gz              (no lane token)
+FASTQ_PATTERNS = [
+    ("standard", re.compile(
+        r"^(?P<prefix>.+?)_S\d+_L(?P<lane>\d+)_(?P<read>[RI][123])_\d+\.fastq\.gz$")),
+    ("dotlane", re.compile(
+        r"^(?P<prefix>.+?)_S\d+_L(?P<lane>\d+)\.(?P<read>[RI][123])_\d+\.fastq\.gz$")),
+    ("nolane", re.compile(
+        r"^(?P<prefix>.+?)_S\d+_(?P<read>[RI][123])_\d+\.fastq\.gz$")),
+]
+
 
 def parse_fastq_dir(url: str) -> str:
-    """
-    Return the GCS directory path (with trailing slash) from a full GCS file URL.
-    e.g. gs://bucket/path/sample_folder/sample_R1_001.fastq.gz
-         → gs://bucket/path/sample_folder/
-    """
+    """Return the GCS directory (with trailing slash) from a full file URL."""
     return url.rsplit("/", 1)[0] + "/"
 
 
-def parse_sample_tag(filename: str) -> str:
+def parse_fastq_meta(filename: str):
     """
-    Extract the CellRanger --sample tag from a FASTQ filename.
-    Strips the Illumina lane/read suffix: _S{n}_L{n}_R{1,2}_{index}.fastq.gz
-
-    e.g. MS1023HH_010720_S5_L004_R1_001.fastq.gz → MS1023HH_010720
-    Falls back to stripping at _R1 / _R2 if the standard pattern is not found.
+    Parse a 10x FASTQ filename into its sample prefix, read token, and naming
+    style. Returns a dict {prefix, read, style, lane} or None if unrecognised.
     """
-    # Standard Illumina pattern
-    match = re.match(r"^(.+?)_S\d+_L\d+_R[12]_\d+\.fastq\.gz$", filename)
-    if match:
-        return match.group(1)
-    # Fallback: strip at _R1 or _R2
-    for suffix in ("_R1", "_R2"):
-        idx = filename.find(suffix)
-        if idx != -1:
-            return filename[:idx]
-    # Last resort: strip extension only
-    return filename.replace(".fastq.gz", "").replace(".fastq", "")
+    for style, pat in FASTQ_PATTERNS:
+        m = pat.match(filename)
+        if m:
+            g = m.groupdict()
+            return {
+                "prefix": g["prefix"],
+                "read": g["read"],
+                "style": style,
+                "lane": g.get("lane"),
+            }
+    return None
 
 
-def parse_chemistry(technique: str) -> str:
+def classify_convention(styles: set, reads: set) -> str:
     """
-    Derive 10x chemistry version from the NeMo sample_technique string.
-    e.g. "10x chromium 3' v3 sequencing" → "v3"
-         "10x chromium 3' v3.1 sequencing" → "v3"
-         "10x chromium 3' v2 sequencing" → "v2"
-    Returns "v3" as a safe default if the version cannot be parsed.
+    Decide the normalisation convention for a CellRanger sample.
+
+      r3       : an R3 read is present → non-standard read layout, the
+                 CellRanger task must remap read roles before running.
+      dotlane  : filenames use `.R1` (dot) → task must rename to `_R1`.
+      standard : usable by CellRanger as-is (covers standard + nolane naming).
     """
-    if pd.isna(technique) or technique is None:
-        return "v3"
-    match = re.search(r"v(\d+)", str(technique))
-    return f"v{match.group(1)}" if match else "v3"
+    if "R3" in reads:
+        return "r3"
+    if "dotlane" in styles:
+        return "dotlane"
+    return "standard"
 
 
 def parse_include_introns(specimen_type: str) -> str:
-    """
-    Return "true" if specimen type is nuclei (snRNA-seq requires --include-introns),
-    "false" for cells (scRNA-seq).
-    """
+    """'true' for nuclei (snRNA-seq needs --include-introns), else 'false'."""
     if pd.isna(specimen_type) or specimen_type is None:
         return "false"
     return "true" if str(specimen_type).strip().lower() == "nuclei" else "false"
 
 
-def parse_hashing(modality: str, hashing_keywords: list) -> str:
-    """
-    Return "true" if the NeMo sample_modality matches any hashing keyword.
-    """
-    if pd.isna(modality) or modality is None:
-        return "false"
-    modality_lower = str(modality).strip().lower()
-    return "true" if any(kw.lower() in modality_lower for kw in hashing_keywords) else "false"
-
-
 # ---------------------------------------------------------------------------
-# Secondary join: get anatomical region from smp-level metadata rows
+# Manifest loading + filtering
 # ---------------------------------------------------------------------------
 
-def build_smp_region_map(smp_df: pd.DataFrame) -> dict:
+def load_manifest(path: str, species: str, sites: list) -> pd.DataFrame:
     """
-    Build a mapping: subject_id → list of (sample_name, anatomical_region)
-    from sample-level (nemo:smp-*) metadata rows.
+    Load the manifest, filter to the requested cohort and to demultiplexed
+    FASTQ rows, and return the surviving rows with parsed FASTQ metadata.
     """
-    region_map = {}
-    for _, row in smp_df.iterrows():
-        sid = row.get("subject_id", None)
-        if pd.isna(sid) or sid is None:
-            continue
-        region = row.get("sample_anatomical_region", None)
-        name = row.get("sample_name", "")
-        if sid not in region_map:
-            region_map[sid] = []
-        region_map[sid].append((str(name) if not pd.isna(name) else "", region))
-    return region_map
+    print(f"[1/5] Loading manifest: {path}")
+    df = pd.read_csv(path, sep="\t", dtype=str)
 
-
-def lookup_anatomical_region(subject_id: str, lib_sample_name: str,
-                              region_map: dict) -> str:
-    """
-    Look up the anatomical region for a library row using the smp-level map.
-
-    Priority:
-      1. Single smp row for this subject → use its region directly.
-      2. Multiple smp rows → try prefix matching on sample_name.
-      3. Still ambiguous → use the first match and emit a warning.
-      4. Subject not found in smp rows → return "unknown".
-    """
-    entries = region_map.get(subject_id, [])
-    if not entries:
-        return "unknown"
-    if len(entries) == 1:
-        region = entries[0][1]
-        return str(region).strip().lower().replace(" ", "_") if not pd.isna(region) else "unknown"
-
-    # Multiple entries: try prefix matching
-    lib_name = str(lib_sample_name) if not pd.isna(lib_sample_name) else ""
-    for smp_name, region in entries:
-        if lib_name.startswith(smp_name) or smp_name.startswith(lib_name):
-            return str(region).strip().lower().replace(" ", "_") if not pd.isna(region) else "unknown"
-
-    # Ambiguous: warn and use first entry
-    warnings.warn(
-        f"Multiple anatomical regions found for subject {subject_id} and no "
-        f"unambiguous prefix match for library sample_name='{lib_sample_name}'. "
-        f"Using first match: '{entries[0][1]}'. "
-        f"Consider using --batch_key donor to avoid ambiguity.",
-        UserWarning
-    )
-    region = entries[0][1]
-    return str(region).strip().lower().replace(" ", "_") if not pd.isna(region) else "unknown"
-
-
-# ---------------------------------------------------------------------------
-# Batch number assignment
-# ---------------------------------------------------------------------------
-
-def assign_batch_numbers(df: pd.DataFrame, batch_key: str,
-                          region_map: dict, label_col: str) -> pd.DataFrame:
-    """
-    Add batch_num (int) and sample_set_id (human-readable string) columns to df.
-
-    batch_key values:
-      donor_region  → (subject_id, anatomical_region) compound key
-      donor         → subject_id only
-      project       → project_id only
-    """
-    if batch_key == "donor_region":
-        # Ensure anatomical_region column is populated via secondary join
-        if "anatomical_region" not in df.columns:
-            df["anatomical_region"] = df.apply(
-                lambda r: lookup_anatomical_region(
-                    r["subject_id"], r.get("sample_name", ""), region_map
-                ),
-                axis=1
-            )
-        group_cols = ["subject_id", "anatomical_region"]
-        label_fn = lambda r: (
-            f"{r[label_col]}_{r['anatomical_region']}"
-            .replace(" ", "_").replace("/", "_")
+    missing = REQUIRED_MANIFEST_COLS - set(df.columns)
+    if missing:
+        sys.exit(
+            f"ERROR: manifest is missing required columns: {sorted(missing)}\n"
+            f"Found columns: {list(df.columns)}"
         )
 
-    elif batch_key == "donor":
+    n0 = len(df)
+
+    # The manifest stores subject_id as a float-like string (e.g. "3647.0").
+    # Strip the trailing ".0" so batch entity IDs / labels are clean integers.
+    df["subject_id"] = df["subject_id"].str.replace(r"\.0$", "", regex=True)
+
+    # Cohort filters
+    if species and species != "*":
+        df = df[df["species"] == species]
+    if sites:
+        df = df[df["anatomical_site"].isin(sites)]
+
+    print(f"      Cohort filter (species={species!r}, sites={len(sites)}): "
+          f"{n0} → {len(df)} rows")
+
+    # Keep only demultiplexed FASTQ files (the runnable CellRanger input).
+    before_fastq = len(df)
+    df = df[(df["data_type"] == "demultiplexed_fastq") & (df["format"] == "fastq")]
+    print(f"      FASTQ rows only: {before_fastq} → {len(df)} rows")
+
+    if df.empty:
+        sys.exit("ERROR: no demultiplexed FASTQ rows remain after filtering.")
+
+    # Derive chemistry from technique; drop excluded techniques.
+    df = df.copy()
+    df["chemistry"] = df["technique"].map(TECHNIQUE_CHEMISTRY)
+    excluded = df[df["chemistry"].isna()]
+    if not excluded.empty:
+        print("      Excluding techniques not in the run allow-list:")
+        for tech, n in excluded["technique"].value_counts().items():
+            print(f"        - {tech}: {n} file rows dropped")
+    df = df[df["chemistry"].notna()].copy()
+
+    if df.empty:
+        sys.exit("ERROR: no rows left after technique allow-list filtering.")
+
+    # Parse FASTQ filenames. NOTE: the manifest `file_name` column is unreliable
+    # (~16% of rows drop infixes like `_HIV_` / `_HIVOUD_` that the real object
+    # carries), so we parse the FASTQ metadata from the `url` basename, which is
+    # the source of truth for what actually exists on GCS.
+    df["url_base"] = df["url"].str.rsplit("/", n=1).str[-1]
+    meta = df["url_base"].apply(parse_fastq_meta)
+    unparsed = df[meta.isna()]
+    if not unparsed.empty:
+        warnings.warn(
+            f"{len(unparsed)} FASTQ file(s) had unrecognised names and were "
+            f"skipped. Example: {unparsed['url_base'].iloc[0]}",
+            UserWarning,
+        )
+    df = df[meta.notna()].copy()
+    meta = meta[meta.notna()]
+
+    df["fastq_prefix"] = meta.apply(lambda d: d["prefix"])
+    df["fastq_read"]   = meta.apply(lambda d: d["read"])
+    df["fastq_style"]  = meta.apply(lambda d: d["style"])
+    df["fastq_dir"]    = df["url"].apply(parse_fastq_dir)
+    df["include_introns"] = df["specimen_type"].apply(parse_include_introns)
+
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Group per-lane FASTQ rows into CellRanger samples
+# ---------------------------------------------------------------------------
+
+def group_into_samples(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Collapse per-lane FASTQ file rows into one row per CellRanger sample,
+    grouped by (subject_id, fastq_prefix). Collect all lane directories into a
+    comma-separated `fastq_dirs` field and classify the naming convention.
+    """
+    print("[2/5] Grouping per-lane FASTQ rows into CellRanger samples ...")
+    records = []
+    for (subject_id, prefix), grp in df.groupby(["subject_id", "fastq_prefix"], sort=True):
+        dirs = sorted(grp["fastq_dir"].unique())
+        styles = set(grp["fastq_style"])
+        reads = set(grp["fastq_read"])
+        convention = classify_convention(styles, reads)
+
+        def first(col):
+            return grp[col].iloc[0]
+
+        # Chemistry / include_introns should be consistent within a sample;
+        # warn if a sample mixes techniques (should not happen in practice).
+        if grp["chemistry"].nunique() > 1:
+            warnings.warn(
+                f"Sample {prefix} (subject {subject_id}) mixes chemistries "
+                f"{sorted(grp['chemistry'].unique())}; using the first.",
+                UserWarning,
+            )
+
+        records.append({
+            "sample_prefix":     prefix,
+            "subject_id":        subject_id,
+            "subject_name":      first("subject_name"),
+            "project_id":        first("project_short_name"),
+            "anatomical_region": str(first("anatomical_site")).strip().lower()
+                                 .replace(" ", "_").replace("/", "_"),
+            "technique":         first("technique"),
+            "chemistry":         first("chemistry"),
+            "include_introns":   first("include_introns"),
+            "fastq_convention":  convention,
+            "fastq_dirs":        ",".join(dirs),
+            "n_lane_dirs":       len(dirs),
+            "nemo_library_ids":  ",".join(sorted(grp["library_id"].unique())),
+        })
+
+    samples = pd.DataFrame(records)
+
+    # Ensure a globally-unique sample_tag (entity id). Disambiguate the rare
+    # case of the same FASTQ prefix appearing under two subjects.
+    dup_mask = samples.duplicated("sample_prefix", keep=False)
+    samples["sample_tag"] = samples["sample_prefix"]
+    if dup_mask.any():
+        samples.loc[dup_mask, "sample_tag"] = (
+            samples.loc[dup_mask, "sample_prefix"] + "__" +
+            samples.loc[dup_mask, "subject_id"].astype(str)
+        )
+        warnings.warn(
+            f"{int(dup_mask.sum())} sample prefixes collided across subjects; "
+            f"suffixed with subject_id to keep sample_tag unique.",
+            UserWarning,
+        )
+
+    # CellRanger --sample prefix (the real FASTQ token, without disambiguation).
+    samples["fastq_sample_prefix"] = samples["sample_prefix"]
+
+    # No hashing on this manifest path (hashing techniques are excluded).
+    samples["hashing"]          = "false"
+    samples["hashing_fastq_r1"] = ""
+    samples["hashing_fastq_r2"] = ""
+    samples["hashing_tag_file"] = ""
+
+    print(f"      {len(df)} FASTQ rows → {len(samples)} CellRanger samples "
+          f"across {samples['subject_id'].nunique()} subjects.")
+
+    # Flag samples that need FASTQ normalisation before CellRanger.
+    need_norm = samples[samples["fastq_convention"] != "standard"]
+    if not need_norm.empty:
+        print("      Samples needing FASTQ normalisation:")
+        for conv, n in need_norm["fastq_convention"].value_counts().items():
+            print(f"        - {conv}: {n} sample(s)")
+
+    return samples
+
+
+# ---------------------------------------------------------------------------
+# Batch assignment
+# ---------------------------------------------------------------------------
+
+def assign_batches(samples: pd.DataFrame, batch_key: str,
+                   label_col: str) -> pd.DataFrame:
+    """Add batch_num (int) and sample_set_id (string) columns."""
+    print(f"[3/5] Assigning batches using batch_key='{batch_key}' ...")
+    if batch_key == "donor":
         group_cols = ["subject_id"]
         label_fn = lambda r: str(r[label_col]).replace(" ", "_")
-
+    elif batch_key == "donor_region":
+        group_cols = ["subject_id", "anatomical_region"]
+        label_fn = lambda r: (
+            f"{r[label_col]}_{r['anatomical_region']}".replace(" ", "_").replace("/", "_")
+        )
     elif batch_key == "project":
         group_cols = ["project_id"]
-        label_fn = lambda r: str(r["project_id"]).replace(":", "_")
-
+        label_fn = lambda r: str(r["project_id"]).replace(":", "_").replace(" ", "_")
     else:
         raise ValueError(
-            f"Unknown --batch_key '{batch_key}'. "
-            "Choose from: donor_region, donor, project"
+            f"Unknown --batch_key '{batch_key}'. Choose: donor, donor_region, project"
         )
 
-    # Create a sorted mapping of group key → batch number
-    group_keys = (
-        df[group_cols]
-        .drop_duplicates()
-        .sort_values(group_cols)
-        .reset_index(drop=True)
-    )
-    group_keys["batch_num"] = group_keys.index + 1
+    keys = (samples[group_cols].drop_duplicates()
+            .sort_values(group_cols).reset_index(drop=True))
+    keys["batch_num"] = keys.index + 1
+    samples = samples.merge(keys, on=group_cols, how="left")
+    samples["sample_set_id"] = samples.apply(label_fn, axis=1)
 
-    df = df.merge(group_keys, on=group_cols, how="left")
+    # Guarantee sample_set_id is 1:1 with batch_num. Human-readable labels
+    # (e.g. subject_name) can collide across distinct batch keys (e.g. two
+    # different subject_ids sharing a subject_name); left unresolved that would
+    # silently merge separate donors/batches into one sample_set. Disambiguate
+    # any colliding label by suffixing the underlying group key(s).
+    label_to_batches = samples.groupby("sample_set_id")["batch_num"].nunique()
+    collided = set(label_to_batches[label_to_batches > 1].index)
+    if collided:
+        mask = samples["sample_set_id"].isin(collided)
+        suffix = samples.loc[mask, group_cols].astype(str).agg("_".join, axis=1)
+        samples.loc[mask, "sample_set_id"] = (
+            samples.loc[mask, "sample_set_id"] + "__" + suffix
+        )
+        warnings.warn(
+            f"{len(collided)} sample_set label(s) collided across distinct "
+            f"'{batch_key}' batches and were suffixed with {group_cols} to keep "
+            f"sample_set_id unique (one submission per batch).",
+            UserWarning,
+        )
 
-    # Human-readable sample_set_id
-    df["sample_set_id"] = df.apply(label_fn, axis=1)
-
-    return df
+    print(f"      {samples['batch_num'].nunique()} batch(es).")
+    return samples
 
 
 # ---------------------------------------------------------------------------
-# Hashing FASTQ pairing
+# Output
 # ---------------------------------------------------------------------------
 
-def pair_hashing_fastqs(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    For samples where hashing=true, attempt to automatically populate
-    hashing_fastq_r1 and hashing_fastq_r2 by finding the corresponding
-    hashing library rows in the same dataframe (matched by subject_id).
+SAMPLE_OUTPUT_COLS = [
+    "sample_tag", "fastq_dirs", "fastq_sample_prefix", "fastq_convention",
+    "chemistry", "include_introns", "hashing",
+    "hashing_fastq_r1", "hashing_fastq_r2", "hashing_tag_file",
+    "batch_num", "sample_set_id",
+    "subject_id", "subject_name", "project_id", "anatomical_region",
+    "technique", "n_lane_dirs", "nemo_library_ids",
+]
 
-    Hashing libraries are identified by their sample_modality being in the
-    hashing keywords (already parsed into the hashing column = "true").
-    """
-    # Rows where hashing library itself is the source of HTO FASTQs
-    hashing_libs = df[df["hashing"] == "true"].copy()
-    rna_libs = df[df["hashing"] == "false"].copy()
 
-    if hashing_libs.empty:
-        df["hashing_fastq_r1"] = ""
-        df["hashing_fastq_r2"] = ""
-        return df
+def write_tables(samples: pd.DataFrame, output_dir: str, prefix: str,
+                 write_individual_map: bool) -> None:
+    print("[4/5] Writing output tables ...")
+    os.makedirs(output_dir, exist_ok=True)
 
-    # Build subject → hashing FASTQ dir map
-    hash_fastq_map = {}
-    for _, row in hashing_libs.iterrows():
-        subj = row["subject_id"]
-        fdir = row["fastq_dir"]
-        if subj not in hash_fastq_map:
-            hash_fastq_map[subj] = fdir
+    sample_out = samples[SAMPLE_OUTPUT_COLS].copy()
+    sample_out.insert(0, "entity:sample_id", samples["sample_tag"])
 
-    def get_hash_r1(row):
-        if row["hashing"] != "true":
-            return ""
-        fdir = hash_fastq_map.get(row["subject_id"], "")
-        # Reconstruct R1 path: fastq_dir + sample_tag + _R1 suffix placeholder
-        # Terra/CellRanger will resolve the actual file; store dir-level path
-        return fdir
+    sample_path = os.path.join(output_dir, f"{prefix}_sample_table.tsv")
+    sample_out.to_csv(sample_path, sep="\t", index=False)
+    print(f"      Wrote sample table ({len(sample_out)} rows): {sample_path}")
 
-    def get_hash_r2(row):
-        if row["hashing"] != "true":
-            return ""
-        return hash_fastq_map.get(row["subject_id"], "")
+    set_rows = []
+    for set_id, grp in sample_out.groupby("sample_set_id"):
+        set_rows.append({
+            "entity:sample_set_id": set_id,
+            "samples": ",".join(grp["entity:sample_id"].tolist()),
+            "batch_num": grp["batch_num"].iloc[0],
+        })
+    set_df = (pd.DataFrame(set_rows).sort_values("batch_num").reset_index(drop=True))
+    set_path = os.path.join(output_dir, f"{prefix}_sample_set_table.tsv")
+    set_df.to_csv(set_path, sep="\t", index=False)
+    print(f"      Wrote sample_set table ({len(set_df)} batch(es)): {set_path}")
 
-    df["hashing_fastq_r1"] = df.apply(get_hash_r1, axis=1)
-    df["hashing_fastq_r2"] = df.apply(get_hash_r2, axis=1)
-    return df
+    if write_individual_map:
+        ind_path = os.path.join(output_dir, f"{prefix}_sample_to_individual.tsv")
+        ind = (sample_out[["sample_tag", "subject_id"]]
+               .rename(columns={"subject_id": "individualID"})
+               .drop_duplicates("sample_tag"))
+        ind.to_csv(ind_path, sep="\t", index=False)
+        print(f"      Wrote sample_to_individual map ({len(ind)} rows): {ind_path}")
+
+    # Summary
+    print("\n[5/5] Summary")
+    print(f"  CellRanger samples:  {len(sample_out)}")
+    print(f"  Subjects:            {samples['subject_id'].nunique()}")
+    print(f"  Batches:             {set_df.shape[0]}")
+    print("  Chemistry breakdown:")
+    for chem, n in sample_out["chemistry"].value_counts().items():
+        print(f"    {chem}: {n}")
+    print("  FASTQ convention breakdown:")
+    for conv, n in sample_out["fastq_convention"].value_counts().items():
+        print(f"    {conv}: {n}")
+    print("\nNext steps:")
+    print(f"  1. Import '{sample_path}' into Terra as a 'sample' entity table.")
+    print(f"  2. Import '{set_path}' into Terra as a 'sample_set' entity table.")
+    print("  3. Set workflow inputs (transcriptome, mito_file, docker SHAs) and run.")
 
 
 # ---------------------------------------------------------------------------
@@ -273,277 +421,41 @@ def pair_hashing_fastqs(df: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     parser = argparse.ArgumentParser(
-        description=(
-            "Generate Terra-ready sample and sample_set TSV tables from "
-            "a Terra Prelim_Data export and a NeMo metadata file."
-        ),
+        description="Generate Terra sample / sample_set tables from the SCORCH "
+                    "manifest (or a cohort subset of it).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
+        epilog=__doc__,
     )
-    parser.add_argument(
-        "--prelim_data", required=True,
-        help="Path to the Prelim_Data TSV exported from Terra."
-    )
-    parser.add_argument(
-        "--nemo_metadata", required=True,
-        help="Path to the NeMo metadata TSV downloaded from the NeMo portal."
-    )
-    parser.add_argument(
-        "--batch_key", default="donor_region",
-        choices=["donor_region", "donor", "project"],
-        help=(
-            "Strategy for grouping samples into batches. "
-            "donor_region: subject_id + anatomical_region (default). "
-            "donor: subject_id only. "
-            "project: project_id only."
-        )
-    )
-    parser.add_argument(
-        "--output_dir", default=".",
-        help="Directory to write output TSV files (default: current directory)."
-    )
-    parser.add_argument(
-        "--output_prefix", default="sample",
-        help="Prefix for output filenames (default: 'sample')."
-    )
-    parser.add_argument(
-        "--batch_label_col", default="subject_name",
-        help=(
-            "Metadata column to use for human-readable sample_set_id labels "
-            "(default: subject_name)."
-        )
-    )
-    parser.add_argument(
-        "--hashing_keywords",
-        default="hashing,HTO,antibody_capture,multiseq,citeseq",
-        help=(
-            "Comma-separated keywords in sample_modality that indicate a "
-            "hashing library (default: hashing,HTO,antibody_capture,multiseq,citeseq)."
-        )
-    )
-    parser.add_argument(
-        "--min_umi_check", type=int, default=1000,
-        help=(
-            "Flag samples with estimated cell counts below this UMI threshold "
-            "as potentially low quality in the output table (default: 1000). "
-            "This mirrors the quality check in CellRanger.py and adds an "
-            "'expected_low_quality' column to the sample table for review."
-        )
-    )
-    parser.add_argument(
-        "--write_individual_map", action="store_true",
-        help=(
-            "Also emit a 2-column TSV mapping each sample_tag to its "
-            "individualID (subject_id). Required input for the downstream "
-            "Azimuth workflow (terra_wdl/downstream.wdl). "
-            "Output file: {output_dir}/{output_prefix}_sample_to_individual.tsv"
-        )
-    )
+    parser.add_argument("--manifest", required=True,
+                        help="Path to the tab-separated manifest / cohort subset.")
+    parser.add_argument("--batch_key", default="donor",
+                        choices=["donor", "donor_region", "project"],
+                        help="How to group samples into sample_sets (default: donor).")
+    parser.add_argument("--species", default="human",
+                        help="Species filter (default: human; '*' disables).")
+    parser.add_argument("--anatomical_sites",
+                        default=",".join(DEFAULT_ANATOMICAL_SITES),
+                        help="Comma-separated anatomical_site values to keep "
+                             "(empty string disables site filtering).")
+    parser.add_argument("--output_dir", default=".",
+                        help="Directory for output TSVs (default: current dir).")
+    parser.add_argument("--output_prefix", default="scorch",
+                        help="Prefix for output filenames (default: scorch).")
+    parser.add_argument("--batch_label_col", default="subject_name",
+                        help="Column for human-readable sample_set_id labels "
+                             "(default: subject_name).")
+    parser.add_argument("--write_individual_map", action="store_true",
+                        help="Also emit a sample_tag → individualID TSV for the "
+                             "downstream Azimuth workflow.")
     args = parser.parse_args()
 
-    hashing_keywords = [k.strip() for k in args.hashing_keywords.split(",")]
+    sites = [s.strip() for s in args.anatomical_sites.split(",") if s.strip()]
 
-    # ------------------------------------------------------------------
-    # 1. Load input files
-    # ------------------------------------------------------------------
-    print(f"[1/7] Loading Prelim_Data from: {args.prelim_data}")
-    prelim_df = pd.read_csv(args.prelim_data, sep="\t", dtype=str)
-    # Normalise column name — Terra exports with 'entity:Prelim_Data_id'
-    prelim_df.columns = [c.replace("entity:", "") for c in prelim_df.columns]
-    required_prelim = {"Prelim_Data_id", "sample_id", "urls"}
-    missing = required_prelim - set(prelim_df.columns)
-    if missing:
-        sys.exit(
-            f"ERROR: Prelim_Data TSV is missing required columns: {missing}\n"
-            f"Found columns: {list(prelim_df.columns)}"
-        )
-
-    print(f"[1/7] Loading NeMo metadata from: {args.nemo_metadata}")
-    meta_df = pd.read_csv(args.nemo_metadata, sep="\t", dtype=str)
-    required_meta = {"sample_id", "subject_id", "subject_name",
-                     "sample_technique", "sample_specimentype",
-                     "sample_modality", "project_id"}
-    missing = required_meta - set(meta_df.columns)
-    if missing:
-        sys.exit(
-            f"ERROR: NeMo metadata TSV is missing required columns: {missing}\n"
-            f"Found columns: {list(meta_df.columns)}"
-        )
-
-    # ------------------------------------------------------------------
-    # 2. Split metadata into library-level and sample-level rows
-    # ------------------------------------------------------------------
-    print("[2/7] Separating library-level and sample-level metadata rows ...")
-    lib_df = meta_df[meta_df["sample_id"].str.startswith("nemo:lib-")].copy()
-    smp_df = meta_df[meta_df["sample_id"].str.startswith("nemo:smp-")].copy()
-
-    print(f"      Library-level rows (nemo:lib-*): {len(lib_df)}")
-    print(f"      Sample-level rows  (nemo:smp-*): {len(smp_df)}")
-
-    if lib_df.empty:
-        sys.exit(
-            "ERROR: No nemo:lib-* rows found in the metadata file. "
-            "Ensure the metadata TSV contains library-level entries."
-        )
-
-    # ------------------------------------------------------------------
-    # 3. Join Prelim_Data ← lib-level metadata on sample_id
-    # ------------------------------------------------------------------
-    print("[3/7] Joining Prelim_Data to library-level metadata ...")
-    merged = prelim_df.merge(lib_df, on="sample_id", how="left", suffixes=("", "_meta"))
-
-    unmatched = merged["subject_id"].isna().sum()
-    if unmatched > 0:
-        warnings.warn(
-            f"{unmatched} rows in Prelim_Data had no matching library entry "
-            f"in the NeMo metadata (sample_id not found in nemo:lib-* rows). "
-            f"These rows will be skipped.",
-            UserWarning
-        )
-    merged = merged[merged["subject_id"].notna()].copy()
-
-    # ------------------------------------------------------------------
-    # 4. Derive per-row fields
-    # ------------------------------------------------------------------
-    print("[4/7] Deriving fastq_dir, sample_tag, chemistry, include_introns, hashing ...")
-    merged["fastq_dir"]       = merged["urls"].apply(parse_fastq_dir)
-    merged["sample_tag"]      = merged["Prelim_Data_id"].apply(parse_sample_tag)
-    merged["chemistry"]       = merged["sample_technique"].apply(parse_chemistry)
-    merged["include_introns"] = merged["sample_specimentype"].apply(parse_include_introns)
-    merged["hashing"]         = merged["sample_modality"].apply(
-        lambda m: parse_hashing(m, hashing_keywords)
-    )
-
-    # ------------------------------------------------------------------
-    # 5. Deduplicate by sample_tag (collapse R1 + R2 rows → one per sample)
-    #    Keep the first occurrence; fastq_dir is the same for both reads.
-    # ------------------------------------------------------------------
-    print("[5/7] Deduplicating R1/R2 rows → one row per sample ...")
-    before = len(merged)
-    merged = merged.drop_duplicates(subset="sample_tag", keep="first").copy()
-    after = len(merged)
-    print(f"      Collapsed {before} file rows → {after} sample rows.")
-
-    # ------------------------------------------------------------------
-    # 6. Assign batch numbers
-    # ------------------------------------------------------------------
-    print(f"[6/7] Assigning batch numbers using batch_key='{args.batch_key}' ...")
-    region_map = build_smp_region_map(smp_df)
-    merged = assign_batch_numbers(merged, args.batch_key, region_map, args.batch_label_col)
-    print(f"      Found {merged['batch_num'].nunique()} unique batch(es).")
-
-    # ------------------------------------------------------------------
-    # 6b. Hashing FASTQ pairing
-    # ------------------------------------------------------------------
-    merged = pair_hashing_fastqs(merged)
-
-    # ------------------------------------------------------------------
-    # 6c. Low-quality flag
-    # ------------------------------------------------------------------
-    # We don't have UMI counts at this stage (pre-CellRanger), so this column
-    # is a placeholder. It will be populated post-CellRanger in Terra.
-    merged["expected_low_quality"] = "false"
-
-    # ------------------------------------------------------------------
-    # 7. Build output tables
-    # ------------------------------------------------------------------
-    print("[7/7] Writing output TSV files ...")
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    # --- sample_table ---
-    sample_cols = [
-        "sample_tag",           # used as entity:sample_id
-        "fastq_dir",
-        "sample_tag",           # CellRanger --sample= argument (same value)
-        "chemistry",
-        "include_introns",
-        "batch_num",
-        "sample_set_id",
-        "hashing",
-        "hashing_fastq_r1",
-        "hashing_fastq_r2",
-        "expected_low_quality",
-        "subject_id",
-        "subject_name",
-        "project_id",
-        "sample_id",            # NeMo library ID (nemo:lib-*)
-    ]
-    # Add anatomical_region if it was computed
-    if "anatomical_region" in merged.columns:
-        sample_cols.append("anatomical_region")
-
-    # Remove duplicates from column list (sample_tag appears twice above intentionally
-    # as both entity id and the sample_tag value column — keep distinct names)
-    sample_out = merged.copy()
-    sample_out.rename(columns={"sample_id": "nemo_library_id"}, inplace=True)
-
-    final_sample_cols = [
-        "sample_tag", "fastq_dir", "chemistry", "include_introns",
-        "batch_num", "sample_set_id", "hashing",
-        "hashing_fastq_r1", "hashing_fastq_r2",
-        "expected_low_quality", "subject_id", "subject_name",
-        "project_id", "nemo_library_id",
-    ]
-    if "anatomical_region" in sample_out.columns:
-        final_sample_cols.append("anatomical_region")
-
-    sample_out = sample_out[final_sample_cols].copy()
-    sample_out.insert(0, "entity:sample_id", sample_out["sample_tag"])
-
-    sample_path = os.path.join(args.output_dir, f"{args.output_prefix}_sample_table.tsv")
-    sample_out.to_csv(sample_path, sep="\t", index=False)
-    print(f"      Wrote sample table ({len(sample_out)} rows): {sample_path}")
-
-    # --- sample_set_table ---
-    set_rows = []
-    for set_id, group in sample_out.groupby("sample_set_id"):
-        member_ids = ",".join(group["entity:sample_id"].tolist())
-        batch_num  = group["batch_num"].iloc[0]
-        set_rows.append({
-            "entity:sample_set_id": set_id,
-            "samples":              member_ids,
-            "batch_num":            batch_num,
-        })
-    set_df = pd.DataFrame(set_rows).sort_values("batch_num").reset_index(drop=True)
-    set_path = os.path.join(args.output_dir, f"{args.output_prefix}_sample_set_table.tsv")
-    set_df.to_csv(set_path, sep="\t", index=False)
-    print(f"      Wrote sample_set table ({len(set_df)} batch(es)): {set_path}")
-
-    # ------------------------------------------------------------------
-    # 7b. Optional: sample_to_individual map (for downstream Azimuth WDL)
-    # ------------------------------------------------------------------
-    if args.write_individual_map:
-        ind_map_path = os.path.join(
-            args.output_dir, f"{args.output_prefix}_sample_to_individual.tsv"
-        )
-        ind_df = sample_out[["sample_tag", "subject_id"]].copy()
-        ind_df = ind_df.rename(columns={"subject_id": "individualID"})
-        # Deduplicate (sample_tag should already be unique, but be defensive)
-        ind_df = ind_df.drop_duplicates(subset="sample_tag", keep="first")
-        ind_df.to_csv(ind_map_path, sep="\t", index=False)
-        print(
-            f"      Wrote sample_to_individual map "
-            f"({len(ind_df)} rows): {ind_map_path}"
-        )
-
-    # ------------------------------------------------------------------
-    # Summary
-    # ------------------------------------------------------------------
-    print("\n--- Summary ---")
-    print(f"  Total samples:        {len(sample_out)}")
-    print(f"  Total batches:        {len(set_df)}")
-    print(f"  Hashing samples:      {(sample_out['hashing'] == 'true').sum()}")
-    print(f"  snRNA (nuclei):       {(sample_out['include_introns'] == 'true').sum()}")
-    print(f"  scRNA (cells):        {(sample_out['include_introns'] == 'false').sum()}")
-    chemistry_counts = sample_out["chemistry"].value_counts().to_dict()
-    for chem, count in chemistry_counts.items():
-        print(f"  Chemistry {chem}:         {count}")
-    print(f"\nNext steps:")
-    print(f"  1. Import '{sample_path}' into Terra as a 'sample' entity table.")
-    print(f"  2. Import '{set_path}' into Terra as a 'sample_set' entity table.")
-    print(f"  3. Add workspace attributes: transcriptome_ref, mito_file,")
-    print(f"     ahba_markers_json, hybrid_markers_json.")
-    print(f"  4. Submit pipeline.wdl on the desired sample_set(s).")
+    df = load_manifest(args.manifest, args.species, sites)
+    samples = group_into_samples(df)
+    samples = assign_batches(samples, args.batch_key, args.batch_label_col)
+    write_tables(samples, args.output_dir, args.output_prefix,
+                 args.write_individual_map)
 
 
 if __name__ == "__main__":

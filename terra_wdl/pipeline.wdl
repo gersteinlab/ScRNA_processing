@@ -51,8 +51,19 @@ workflow SCRNAseqPipeline {
     # Stage 1 inputs – only required when skip_cellranger = false
     # -----------------------------------------------------------------------
 
-    ## GCS paths to per-sample FASTQ directories (folders, not individual files)
+    ## Per-sample FASTQ source directories. Each element corresponds to one
+    ## sample and may be a COMMA-SEPARATED list of GCS directories when that
+    ## sample's lanes live in separate folders (gs://.../L001/,gs://.../L002/).
+    ## The comma list is split inside the CellRangerCount task and passed to
+    ## CellRanger's --fastqs (which accepts multiple directories).
     Array[String] fastq_dirs = []
+
+    ## FASTQ naming/read-layout convention per sample (parallel to fastq_dirs):
+    ##   "standard" – already CellRanger-parseable (default)
+    ##   "dotlane"  – `..._L001.R1_001.fastq.gz`, needs dot→underscore rename
+    ##   "r3"       – R1/R2/R3 layout; refused until read-role mapping confirmed
+    ## If empty or shorter than sample_tags, "standard" is assumed per sample.
+    Array[String] fastq_conventions = []
 
     ## 10x chemistry: "v2", "v3", or "auto"
     Array[String] chemistry_flags = []
@@ -187,7 +198,8 @@ workflow SCRNAseqPipeline {
       # ---------------------------------------------------------------------
       call CellRangerCount {
         input:
-          fastq_dir            = fastq_dirs[i],
+          fastq_dirs           = fastq_dirs[i],
+          fastq_convention     = if length(fastq_conventions) > i then fastq_conventions[i] else "standard",
           sample_tag           = sample_tags[i],
           fastq_sample_prefix  = if length(fastq_sample_prefixes) > i then fastq_sample_prefixes[i] else "",
           transcriptome        = transcriptome_gcs_path,
@@ -358,7 +370,11 @@ task LocalizeH5 {
 
 task CellRangerCount {
   input {
-    String  fastq_dir
+    ## Comma-separated GCS FASTQ directory list for this one sample
+    ## (one entry per lane-folder). Split inside the task → CellRanger --fastqs.
+    String  fastq_dirs
+    ## FASTQ naming convention: "standard" | "dotlane" | "r3"
+    String  fastq_convention = "standard"
     String  sample_tag
     String  fastq_sample_prefix = ""
     String  transcriptome
@@ -379,7 +395,8 @@ task CellRangerCount {
     set -euo pipefail
 
     python3 /opt/pipeline/cellranger_task.py \
-      --fastq_dir            "~{fastq_dir}" \
+      --fastq_dirs           "~{fastq_dirs}" \
+      --fastq_convention     "~{fastq_convention}" \
       --sample_tag           "~{sample_tag}" \
       --fastq_sample_prefix  "~{fastq_sample_prefix}" \
       --transcriptome        "~{transcriptome}" \

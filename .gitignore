@@ -15,3 +15,7 @@ nul
 # Large reference data (staged in GCS, not git)
 refdata-gex-GRCh38-2024-A.tar.gz
 refdata-gex-GRCh38-2024-A/
+
+# Python bytecode
+__pycache__/
+*.pyc

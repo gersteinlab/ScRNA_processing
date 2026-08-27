@@ -1,0 +1,48 @@
+{
+  "_comment": "Data-table-driven inputs for the SCORCH PFC Multiome cohort (nohash subset, batch_key=donor, 162 sample_sets / 186 samples, all ARC-v1). Root entity for each submission = a sample_set row from scorch_pfc_sample_set_table.tsv; the per-sample arrays below are resolved from the scorch_pfc_sample_table.tsv columns via this.samples.<col>. Pin the two majidfarhadloo docker tags to the sha-<short> produced by the GitHub Actions build of the commit that includes the r3/prefix-glob fixes before running.",
+
+  "SCRNAseqPipeline.skip_cellranger": false,
+  "SCRNAseqPipeline.precomputed_h5_urls": [],
+
+  "SCRNAseqPipeline.sample_tags": "this.samples.sample_tag",
+  "SCRNAseqPipeline.fastq_dirs": "this.samples.fastq_dirs",
+  "SCRNAseqPipeline.fastq_conventions": "this.samples.fastq_convention",
+  "SCRNAseqPipeline.chemistry_flags": "this.samples.chemistry",
+  "SCRNAseqPipeline.include_introns_flags": "this.samples.include_introns",
+  "SCRNAseqPipeline.fastq_sample_prefixes": "this.samples.fastq_sample_prefix",
+  "SCRNAseqPipeline.hashing_flags": "this.samples.hashing",
+  "SCRNAseqPipeline.hashing_fastq_r1": "this.samples.hashing_fastq_r1",
+  "SCRNAseqPipeline.hashing_fastq_r2": "this.samples.hashing_fastq_r2",
+  "SCRNAseqPipeline.hashing_tag_files": "this.samples.hashing_tag_file",
+
+  "SCRNAseqPipeline.transcriptome_gcs_path": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/references/refdata-gex-GRCh38-2024-A",
+  "SCRNAseqPipeline.mito_file": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/mito_genes.csv",
+
+  "SCRNAseqPipeline.batch_name": "this.sample_set_id",
+  "SCRNAseqPipeline.run_prefix": "scorch_pfc",
+
+  "SCRNAseqPipeline.run_cellbender": true,
+  "SCRNAseqPipeline.billing_project": "terra-4ea165c8",
+
+  "SCRNAseqPipeline.cellranger_cpu": 16,
+  "SCRNAseqPipeline.cellranger_mem_gb": 64,
+  "SCRNAseqPipeline.cellranger_disk_gb": 500,
+
+  "SCRNAseqPipeline.pegasus_cpu": 16,
+  "SCRNAseqPipeline.pegasus_mem_gb": 128,
+  "SCRNAseqPipeline.pegasus_disk_gb": 200,
+
+  "SCRNAseqPipeline.qc_min_umis": 500,
+  "SCRNAseqPipeline.qc_percent_mito": 10,
+  "SCRNAseqPipeline.qc_min_genes": 200,
+  "SCRNAseqPipeline.min_umi_check": 1000,
+  "SCRNAseqPipeline.n_jobs_pg": 10,
+  "SCRNAseqPipeline.hvg_n_top": 5000,
+  "SCRNAseqPipeline.dd_bst_n_iters": 25,
+  "SCRNAseqPipeline.dd_pred_pthresh": 0.0000000000000001,
+  "SCRNAseqPipeline.dd_pred_voterthresh": 0.3,
+
+  "SCRNAseqPipeline.cellranger_docker": "majidfarhadloo/scrna_processing_cellranger:REPLACE_WITH_NEW_SHA",
+  "SCRNAseqPipeline.cellbender_docker": "us.gcr.io/broad-dsde-methods/cellbender:0.3.0",
+  "SCRNAseqPipeline.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:REPLACE_WITH_NEW_SHA"
+}
