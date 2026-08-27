@@ -390,6 +390,14 @@ def write_tables(samples: pd.DataFrame, output_dir: str, prefix: str,
     set_df.to_csv(set_path, sep="\t", index=False)
     print(f"      Wrote sample_set table ({len(set_df)} batch(es)): {set_path}")
 
+    # Membership table: the reliable way to populate sample_set → sample links
+    # in Terra (one row per membership). Import AFTER the sample table.
+    mem = sample_out[["sample_set_id", "entity:sample_id"]].copy()
+    mem.columns = ["membership:sample_set_id", "sample"]
+    mem_path = os.path.join(output_dir, f"{prefix}_sample_set_membership.tsv")
+    mem.to_csv(mem_path, sep="\t", index=False)
+    print(f"      Wrote sample_set membership ({len(mem)} rows): {mem_path}")
+
     if write_individual_map:
         ind_path = os.path.join(output_dir, f"{prefix}_sample_to_individual.tsv")
         ind = (sample_out[["sample_tag", "subject_id"]]
