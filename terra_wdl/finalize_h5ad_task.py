@@ -127,7 +127,11 @@ def main():
     # have NaNs in unrelated upstream QC columns.
     keep_mask = data.obs["azimuth"].notnull().to_numpy()
     n_before = data.obs.shape[0]
-    data = MultimodalData(data[keep_mask].copy())
+    # Boolean-subset the cells. In current pegasusio, `data[mask].copy()`
+    # already returns a MultimodalData; wrapping it again in MultimodalData()
+    # triggers `AttributeError: 'MultimodalData' object has no attribute
+    # 'get_uid'` (get_uid only exists on UnimodalData). Use the result directly.
+    data = data[keep_mask].copy()
     print(f"  After dropping cells without Azimuth: "
           f"{data.obs.shape[0]} cells (dropped {n_before - data.obs.shape[0]})")
 
