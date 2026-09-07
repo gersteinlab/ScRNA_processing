@@ -12,7 +12,7 @@
   "ScrnaDownstream.leiden_resolution": 4.5,
   "ScrnaDownstream.azimuth_dims": 30,
 
-  "ScrnaDownstream.azimuth_docker": "majidfarhadloo/scrna_processing_azimuth:sha-e35159d",
+  "ScrnaDownstream.azimuth_docker": "majidfarhadloo/scrna_processing_azimuth:sha-591b780",
   "ScrnaDownstream.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:sha-d9b99c3",
 
   "ScrnaDownstream.azimuth_cpu": 64,

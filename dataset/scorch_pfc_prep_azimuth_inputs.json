@@ -1,0 +1,13 @@
+{
+  "_comment": "One-time inputs for PrepAzimuthReferences (terra_wdl/prep_azimuth_references.wdl). Run as a STANDALONE Terra submission with NO root entity -- every input is a literal gs:// path. Runs SCTransform+RunPCA on the two raw reference atlases ONCE and emits AHBA_sct_pca.rds / Ma_Sestan_sct_pca.rds. After the run succeeds, copy the two workflow outputs into gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/references/azimuth/ (the paths scorch_pfc_downstream_inputs.json's ahba_ref_rds / ma_sestan_ref_rds point at), then run the downstream workflow. Needs the big 416 GB machine ONCE. azimuth_docker must be sha-591b780 or newer (the image that contains prep_azimuth_references.R).",
+
+  "PrepAzimuthReferences.ahba_mat_rds": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/references/azimuth/AHBA_mat.RDS",
+  "PrepAzimuthReferences.ahba_meta_rds": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/references/azimuth/AHBA_meta_share.RDS",
+  "PrepAzimuthReferences.ma_sestan_mat_rds": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/references/azimuth/Ma_Sestan_mat.rds",
+
+  "PrepAzimuthReferences.azimuth_docker": "majidfarhadloo/scrna_processing_azimuth:sha-591b780",
+
+  "PrepAzimuthReferences.cpu": 64,
+  "PrepAzimuthReferences.mem_gb": 416,
+  "PrepAzimuthReferences.disk_gb": 200
+}
