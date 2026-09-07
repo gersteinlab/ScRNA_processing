@@ -1,0 +1,29 @@
+{
+  "_comment": "Data-table-driven inputs for the SCORCH PFC downstream Azimuth workflow (ScrnaDownstream in terra_wdl/downstream.wdl). Root entity for each submission = a sample_set row (same scorch_pfc_sample_set_table.tsv used by the main pipeline). One submission fans out across all selected sample_sets. IMPORTANT: pegasus_h5ad below binds to the sample_set attribute 'pegasus_hybrid_filtered_h5ad' -- this only resolves if the MAIN pipeline was configured to write its outputs back to the data table. If that column is NOT present on your sample_set table, run tests/harvest_pegasus_h5ad.ps1 to build scorch_pfc_pegasus_h5ad.tsv, import it to populate the column, THEN run this. batch_name MUST equal the main run's batch_name (this.sample_set_id) because it is the {batch}_Hybrid_filtered.h5ad filename prefix.",
+
+  "ScrnaDownstream.pegasus_h5ad": "this.pegasus_hybrid_filtered_h5ad",
+  "ScrnaDownstream.batch_name": "this.sample_set_id",
+
+  "ScrnaDownstream.ahba_ref_rds": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/references/azimuth/AHBA_sct_pca.rds",
+  "ScrnaDownstream.ma_sestan_ref_rds": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/references/azimuth/Ma_Sestan_sct_pca.rds",
+
+  "ScrnaDownstream.sample_to_individual_tsv": "gs://fc-dde46beb-1862-45cf-92bc-06c767e05710/references/scorch_pfc_sample_to_individual.tsv",
+
+  "ScrnaDownstream.leiden_resolution": 4.5,
+  "ScrnaDownstream.azimuth_dims": 30,
+
+  "ScrnaDownstream.azimuth_docker": "majidfarhadloo/scrna_processing_azimuth:sha-e35159d",
+  "ScrnaDownstream.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:sha-d9b99c3",
+
+  "ScrnaDownstream.azimuth_cpu": 64,
+  "ScrnaDownstream.azimuth_mem_gb": 416,
+  "ScrnaDownstream.azimuth_disk_gb": 128,
+
+  "ScrnaDownstream.reconcile_cpu": 2,
+  "ScrnaDownstream.reconcile_mem_gb": 8,
+  "ScrnaDownstream.reconcile_disk_gb": 50,
+
+  "ScrnaDownstream.finalize_cpu": 16,
+  "ScrnaDownstream.finalize_mem_gb": 104,
+  "ScrnaDownstream.finalize_disk_gb": 200
+}

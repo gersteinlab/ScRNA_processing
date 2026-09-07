@@ -11,6 +11,15 @@
 #   - Writes outputs to current working directory; the WDL `output {}`
 #     block captures them via globs.
 #
+# Reference caching (see prep_azimuth_references.R / .wdl):
+#   The two reference atlases are now PRE-processed (SCTransform + RunPCA)
+#   once by prep_azimuth_references.R and passed in here as ready-to-use
+#   Seurat .RDS objects (--ahba_ref_rds / --ma_sestan_ref_rds). This task
+#   no longer rebuilds/SCTransforms the references on every batch; it only
+#   loads them and transforms the (small) query. The objects handed to
+#   FindTransferAnchors are identical to the previous in-task build, so
+#   label-transfer output is unchanged.
+#
 # Outputs (in cwd):
 #   {batch_name}_Azimuth_predictions_AHBA.csv
 #   {batch_name}_Azimuth_predictions_Ma_Sestan.csv
@@ -30,12 +39,10 @@ suppressPackageStartupMessages({
 option_list <- list(
   make_option(c("--h5ad"), type = "character",
               help = "Path to the Pegasus Hybrid_filtered h5ad."),
-  make_option(c("--ahba_mat_rds"), type = "character",
-              help = "Path to AHBA_mat.RDS (raw count matrix)."),
-  make_option(c("--ahba_meta_rds"), type = "character",
-              help = "Path to AHBA_meta_share.RDS (cell metadata)."),
-  make_option(c("--ma_sestan_mat_rds"), type = "character",
-              help = "Path to Ma_Sestan_mat.rds (pre-built Seurat object)."),
+  make_option(c("--ahba_ref_rds"), type = "character",
+              help = "Path to the PRE-processed AHBA reference (SCTransform + PCA) .RDS from prep_azimuth_references.R."),
+  make_option(c("--ma_sestan_ref_rds"), type = "character",
+              help = "Path to the PRE-processed Ma-Sestan reference (SCTransform + PCA) .RDS from prep_azimuth_references.R."),
   make_option(c("--batch_name"), type = "character",
               help = "Batch name used as output filename prefix."),
   make_option(c("--dims"), type = "integer", default = 30,
@@ -44,31 +51,18 @@ option_list <- list(
 opt <- parse_args(OptionParser(option_list = option_list))
 
 stopifnot(!is.null(opt$h5ad))
-stopifnot(!is.null(opt$ahba_mat_rds))
-stopifnot(!is.null(opt$ahba_meta_rds))
-stopifnot(!is.null(opt$ma_sestan_mat_rds))
+stopifnot(!is.null(opt$ahba_ref_rds))
+stopifnot(!is.null(opt$ma_sestan_ref_rds))
 stopifnot(!is.null(opt$batch_name))
 
 batch <- opt$batch_name
 
-cat(sprintf("[1/7] Loading Ma-Sestan reference: %s\n", opt$ma_sestan_mat_rds))
-seurat_obj_ref_Ma <- readRDS(opt$ma_sestan_mat_rds)
-seurat_obj_ref_Ma <- UpdateSeuratObject(seurat_obj_ref_Ma)
+cat(sprintf("[1/6] Loading pre-processed references:\n  AHBA: %s\n  Ma-Sestan: %s\n",
+            opt$ahba_ref_rds, opt$ma_sestan_ref_rds))
+seurat_obj_ref_AHBA <- readRDS(opt$ahba_ref_rds)
+seurat_obj_ref_Ma <- readRDS(opt$ma_sestan_ref_rds)
 
-cat(sprintf("[2/7] Loading AHBA reference matrix + metadata\n"))
-rawRDS_AHBA <- readRDS(opt$ahba_mat_rds)
-metaRDS_AHBA <- as.data.frame(readRDS(opt$ahba_meta_rds))
-rownames(metaRDS_AHBA) <- metaRDS_AHBA$sample_id
-seurat_obj_ref_AHBA <- CreateSeuratObject(
-  counts = rawRDS_AHBA,
-  project = "dlpfc",
-  meta.data = metaRDS_AHBA,
-  min.cells = 1,
-  min.features = 0
-)
-Idents(seurat_obj_ref_AHBA) <- seurat_obj_ref_AHBA$method
-
-cat(sprintf("[3/7] Loading query h5ad: %s\n", opt$h5ad))
+cat(sprintf("[2/6] Loading query h5ad: %s\n", opt$h5ad))
 seurat_obj_query <- read_h5ad(opt$h5ad)
 cat(sprintf("  Query raw dim: %d x %d\n",
             dim(seurat_obj_query$raw$X)[1], dim(seurat_obj_query$raw$X)[2]))
@@ -83,21 +77,17 @@ seurat_obj_query <- SeuratObject::CreateSeuratObject(
   meta.data = seurat_obj_query$obs
 )
 
-cat("[4/7] SCTransform on all three objects\n")
+cat("[3/6] SCTransform on query\n")
 options(future.globals.maxSize = 1000000 * 1024^2)
-seurat_obj_ref_AHBA <- SCTransform(seurat_obj_ref_AHBA)
-seurat_obj_ref_Ma <- SCTransform(seurat_obj_ref_Ma)
 seurat_obj_query <- SCTransform(seurat_obj_query)
 
-cat("[5/7] PCA on all three objects\n")
-seurat_obj_ref_AHBA <- RunPCA(seurat_obj_ref_AHBA)
-seurat_obj_ref_Ma <- RunPCA(seurat_obj_ref_Ma)
+cat("[4/6] PCA on query\n")
 seurat_obj_query <- RunPCA(seurat_obj_query)
 
 # ---------------------------------------------------------------------------
 # Ma-Sestan label transfer
 # ---------------------------------------------------------------------------
-cat("[6/7] Transferring Ma-Sestan labels\n")
+cat("[5/6] Transferring Ma-Sestan labels\n")
 transfer_anchors_Ma <- FindTransferAnchors(
   reference = seurat_obj_ref_Ma,
   query = seurat_obj_query,
@@ -128,7 +118,7 @@ dev.off()
 # ---------------------------------------------------------------------------
 # AHBA label transfer
 # ---------------------------------------------------------------------------
-cat("[7/7] Transferring AHBA labels\n")
+cat("[6/6] Transferring AHBA labels\n")
 transfer_anchors_AHBA <- FindTransferAnchors(
   reference = seurat_obj_ref_AHBA,
   query = seurat_obj_query,

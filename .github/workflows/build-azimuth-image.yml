@@ -26,6 +26,7 @@ on:
     paths:
       - "terra_wdl/Dockerfile.azimuth"
       - "terra_wdl/hybrid_azimuth_task.R"
+      - "terra_wdl/prep_azimuth_references.R"
 
   # Allow manual triggering from the GitHub Actions UI
   workflow_dispatch:

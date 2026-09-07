@@ -25,11 +25,12 @@ workflow ScrnaDownstream {
     String batch_name                  # matches the Pegasus batch name
 
     # ----------------------------------------------------------------------
-    # Azimuth references (stage once in GCS)
+    # Azimuth references (PRE-PROCESSED once by prep_azimuth_references.wdl:
+    # SCTransform + RunPCA already applied, saved as Seurat .RDS). Stage the
+    # two prep outputs in GCS and point here.
     # ----------------------------------------------------------------------
-    File ahba_mat_rds                  # AHBA_mat.RDS
-    File ahba_meta_rds                 # AHBA_meta_share.RDS
-    File ma_sestan_mat_rds             # Ma_Sestan_mat.rds
+    File ahba_ref_rds                  # AHBA_sct_pca.rds
+    File ma_sestan_ref_rds             # Ma_Sestan_sct_pca.rds
 
     # ----------------------------------------------------------------------
     # Per-batch sample -> individual map
@@ -69,9 +70,8 @@ workflow ScrnaDownstream {
     input:
       pegasus_h5ad       = pegasus_h5ad,
       batch_name         = batch_name,
-      ahba_mat_rds       = ahba_mat_rds,
-      ahba_meta_rds      = ahba_meta_rds,
-      ma_sestan_mat_rds  = ma_sestan_mat_rds,
+      ahba_ref_rds       = ahba_ref_rds,
+      ma_sestan_ref_rds  = ma_sestan_ref_rds,
       dims               = azimuth_dims,
       docker             = azimuth_docker,
       cpu                = azimuth_cpu,
@@ -122,9 +122,8 @@ task HybridAzimuth {
   input {
     File pegasus_h5ad
     String batch_name
-    File ahba_mat_rds
-    File ahba_meta_rds
-    File ma_sestan_mat_rds
+    File ahba_ref_rds
+    File ma_sestan_ref_rds
     Int dims
     String docker
     Int cpu
@@ -136,9 +135,8 @@ task HybridAzimuth {
     set -euo pipefail
     Rscript /opt/pipeline/hybrid_azimuth_task.R \
       --h5ad             "~{pegasus_h5ad}" \
-      --ahba_mat_rds     "~{ahba_mat_rds}" \
-      --ahba_meta_rds    "~{ahba_meta_rds}" \
-      --ma_sestan_mat_rds "~{ma_sestan_mat_rds}" \
+      --ahba_ref_rds     "~{ahba_ref_rds}" \
+      --ma_sestan_ref_rds "~{ma_sestan_ref_rds}" \
       --batch_name       "~{batch_name}" \
       --dims             ~{dims}
   >>>

@@ -85,7 +85,8 @@ RUN R -e "library(Seurat); library(SeuratObject); library(SeuratDisk); library(A
 # ---------------------------------------------------------------------------
 RUN mkdir -p /opt/pipeline
 COPY terra_wdl/hybrid_azimuth_task.R /opt/pipeline/hybrid_azimuth_task.R
-RUN chmod +x /opt/pipeline/hybrid_azimuth_task.R
+COPY terra_wdl/prep_azimuth_references.R /opt/pipeline/prep_azimuth_references.R
+RUN chmod +x /opt/pipeline/hybrid_azimuth_task.R /opt/pipeline/prep_azimuth_references.R
 
 WORKDIR /work
 
