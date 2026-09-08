@@ -53,16 +53,16 @@ workflow ScrnaDownstream {
     # ----------------------------------------------------------------------
     # Compute (see PIPELINE_RUN_SUMMARY.md section 8.7)
     # ----------------------------------------------------------------------
-    Int azimuth_cpu      = 64
-    Int azimuth_mem_gb   = 416
-    Int azimuth_disk_gb  = 500
+    Int azimuth_cpu      = 20
+    Int azimuth_mem_gb   = 128
+    Int azimuth_disk_gb  = 64
 
     Int reconcile_cpu      = 2
     Int reconcile_mem_gb   = 8
     Int reconcile_disk_gb  = 50
 
     Int finalize_cpu      = 16
-    Int finalize_mem_gb   = 104
+    Int finalize_mem_gb   = 32
     Int finalize_disk_gb  = 200
   }
 

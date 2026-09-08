@@ -15,15 +15,15 @@
   "ScrnaDownstream.azimuth_docker": "majidfarhadloo/scrna_processing_azimuth:sha-591b780",
   "ScrnaDownstream.pegasus_docker": "majidfarhadloo/scrna_processing_pegasus:sha-d9b99c3",
 
-  "ScrnaDownstream.azimuth_cpu": 64,
-  "ScrnaDownstream.azimuth_mem_gb": 416,
-  "ScrnaDownstream.azimuth_disk_gb": 128,
+  "ScrnaDownstream.azimuth_cpu": 20,
+  "ScrnaDownstream.azimuth_mem_gb": 128,
+  "ScrnaDownstream.azimuth_disk_gb": 64,
 
   "ScrnaDownstream.reconcile_cpu": 2,
   "ScrnaDownstream.reconcile_mem_gb": 8,
   "ScrnaDownstream.reconcile_disk_gb": 50,
 
   "ScrnaDownstream.finalize_cpu": 16,
-  "ScrnaDownstream.finalize_mem_gb": 208,
+  "ScrnaDownstream.finalize_mem_gb": 32,
   "ScrnaDownstream.finalize_disk_gb": 200
 }
