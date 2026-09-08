@@ -24,6 +24,6 @@
   "ScrnaDownstream.reconcile_disk_gb": 50,
 
   "ScrnaDownstream.finalize_cpu": 16,
-  "ScrnaDownstream.finalize_mem_gb": 104,
+  "ScrnaDownstream.finalize_mem_gb": 208,
   "ScrnaDownstream.finalize_disk_gb": 200
 }

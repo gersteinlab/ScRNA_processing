@@ -139,6 +139,10 @@ task HybridAzimuth {
       --ma_sestan_ref_rds "~{ma_sestan_ref_rds}" \
       --batch_name       "~{batch_name}" \
       --dims             ~{dims}
+    # Peak-memory readout (cgroup v2 first, v1 fallback) for right-sizing.
+    echo "PEAK_MEM_BYTES=$(cat /sys/fs/cgroup/memory.peak 2>/dev/null \
+      || cat /sys/fs/cgroup/memory/memory.max_usage_in_bytes 2>/dev/null \
+      || echo NA)" >&2
   >>>
 
   output {
@@ -222,6 +226,10 @@ task FinalizeH5ad {
       --batch_name                "~{batch_name}" \
       --resolution                ~{resolution} \
       --n_jobs                    ~{cpu}
+    # Peak-memory readout (cgroup v2 first, v1 fallback) for right-sizing.
+    echo "PEAK_MEM_BYTES=$(cat /sys/fs/cgroup/memory.peak 2>/dev/null \
+      || cat /sys/fs/cgroup/memory/memory.max_usage_in_bytes 2>/dev/null \
+      || echo NA)" >&2
   >>>
 
   output {
